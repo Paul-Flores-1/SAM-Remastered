@@ -1,0 +1,11 @@
+# Ignorar carpetas de entornos virtuales y librerias
+venv/
+env/
+.env
+__pycache__/
+*.pyc
+*.log
+*.mp4
+*.exe
+*.dll
+BASE DE DATOS/pgAdmin 4/
