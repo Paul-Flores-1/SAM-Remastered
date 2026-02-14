@@ -1,16 +1,21 @@
-# sam_remastered
+# SAM - Security Assistance Mobile (Remastered)
 
-A new Flutter project.
+**SAM** es una aplicación de seguridad inteligente diseñada para la prevención de accidentes y asistencia vial. Este proyecto es una reingeniería completa enfocada en la experiencia de usuario (UX), arquitectura limpia y optimización de recursos.
 
-## Getting Started
+## Características Implementadas (UI/UX)
+* **Onboarding Interactivo:** Sistema de bienvenida con animaciones suaves (`AnimatedSwitcher`) y temporizador automático para guiar al usuario.
+* **Autenticación Robusta:** Módulos de **Login y Registro** con validación de formularios en tiempo real y gestión segura de controladores (`dispose`).
+* **Dashboard Moderno:** Panel de control principal con diseño de **Bottom Sheet** deslizante y navegación por pestañas para acceso rápido.
+* **Gestión de Emergencia:** Interfaz para el registro de datos médicos críticos (tipo de sangre, alergias) y contactos de confianza.
 
-This project is a starting point for a Flutter application.
+## Tecnologías y Optimización
+* **Flutter & Dart:** Framework principal.
+* **Google Fonts:** Tipografía profesional (Montserrat y Roboto) para mejor legibilidad.
+* **Gestión de Memoria:** Uso de `const` widgets y liberación de recursos en el ciclo de vida de la app.
+* **Diseño Responsivo:** Interfaces adaptables a diferentes tamaños de pantalla.
 
-A few resources to get you started if this is your first Flutter project:
+## Roadmap (Próximos pasos)
+Actualmente se está trabajando en la integración de la lógica de sensores IoT (Acelerómetro/Giroscopio) migrada de la versión prototipo anterior para la detección automática de caídas.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+*Proyecto desarrollado por Alan Paul Santiago Flores.*
