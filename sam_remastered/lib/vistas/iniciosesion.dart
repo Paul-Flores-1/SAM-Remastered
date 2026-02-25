@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-// Importamos las otras pantallas para poder navegar
 import 'package:sam_remastered/vistas/registro.dart';
 import 'package:sam_remastered/vistas/principal.dart';
 
@@ -12,13 +11,13 @@ class PantallaLogin extends StatefulWidget {
 }
 
 class _PantallaLoginState extends State<PantallaLogin> {
-  // Controladores para capturar el texto
+  
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
-  bool _ocultarPassword = true; // Variable para el "ojito" de la contraseña
+  bool _ocultarPassword = true; 
 
-  // OPTIMIZACIÓN: Liberar memoria al salir de esta pantalla
+  
   @override
   void dispose() {
     _emailController.dispose();
@@ -28,13 +27,12 @@ class _PantallaLoginState extends State<PantallaLogin> {
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos el tamaño de la pantalla para hacerlo responsivo
+    
     final size = MediaQuery.of(context).size;
     final double alto = size.height;
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // GESTURE DETECTOR: Cierra el teclado si tocas cualquier parte vacía
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: SafeArea(
@@ -45,10 +43,10 @@ class _PantallaLoginState extends State<PantallaLogin> {
               children: [
                 SizedBox(height: alto * 0.05),
       
-                // --- 1. LOGO Y BIENVENIDA ---
+                // LOGO Y BIENVENIDA
                 Image.asset(
                   "assets/images/logo samR.png",
-                  height: alto * 0.12, // El logo ocupa el 12% de la altura
+                  height: alto * 0.12, 
                   fit: BoxFit.contain,
                   gaplessPlayback: true,
                 ),
@@ -68,7 +66,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
       
                 SizedBox(height: alto * 0.08),
       
-                // --- 2. CAMPOS DE TEXTO ---
+                
                 // Email
                 TextField(
                   controller: _emailController,
@@ -91,7 +89,6 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   decoration: InputDecoration(
                     labelText: "Contraseña",
                     prefixIcon: const Icon(Icons.lock_outline),
-                    // Botón del ojito
                     suffixIcon: IconButton(
                       icon: Icon(
                         _ocultarPassword ? Icons.visibility_off : Icons.visibility,
@@ -113,7 +110,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      // Aquí iría la lógica de recuperación
+                      
                     },
                     child: const Text("¿Olvidaste tu contraseña?"),
                   ),
@@ -121,7 +118,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
       
                 SizedBox(height: alto * 0.05),
       
-                // --- 3. BOTÓN INGRESAR ---
+                // BOTÓN INGRESAR
                 SizedBox(
                   width: double.infinity,
                   height: 55,
@@ -138,7 +135,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary, // Azul SAM
+                      backgroundColor: Theme.of(context).colorScheme.primary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -153,7 +150,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
       
                 const SizedBox(height: 20),
       
-                // --- 4. SEPARADOR ---
+                //SEPARADOR
                 Row(
                   children: [
                     const Expanded(child: Divider()),
@@ -167,14 +164,13 @@ class _PantallaLoginState extends State<PantallaLogin> {
       
                 const SizedBox(height: 20),
       
-                // --- 5. IR A REGISTRO ---
+                //IR A REGISTRO
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text("¿No tienes cuenta? ", style: TextStyle(fontSize: 16)),
                     GestureDetector(
                       onTap: () {
-                        // Navegar a la pantalla de Registro
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const PantallaRegistro())
@@ -183,7 +179,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       child: Text(
                         "Regístrate aquí",
                         style: TextStyle(
-                          color: Theme.of(context).colorScheme.secondary, // Naranja SAM
+                          color: Theme.of(context).colorScheme.secondary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),

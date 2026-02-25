@@ -1,13 +1,28 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'package:sam_remastered/vistas/iniciosesion.dart';
+import 'package:sam_remastered/vistas/registro.dart';
+import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
+import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  //Bloquea la rotacion de pantalla :3
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  final GoogleMapsFlutterPlatform mapsImplementation = GoogleMapsFlutterPlatform.instance;
+  if (mapsImplementation is GoogleMapsFlutterAndroid) {
+    mapsImplementation.useAndroidViewSurface = true;
+
   // await Firebase.initializeApp(); 
   runApp(const SamApp());
-}
+}}
 
 class SamApp extends StatelessWidget {
   const SamApp({super.key});
@@ -60,7 +75,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _paginaActual = 0;
   Timer? _timer;
 
-  // Usamos 'const' donde sea posible para optimizar memoria
+  // Lista con 4 imágenes
   final List<Map<String, String>> _datosOnboarding = const [
     {
       "imagen": "assets/images/carru1.jpg",
@@ -74,6 +89,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       "imagen": "assets/images/carru3.jpg",
       "texto": "Usa tu casco y equipo de seguridad al salir."
     },
+    {
+      "imagen": "assets/images/carru4.jpg",
+      "texto": "SAM24. Te cuida las 24 horas del día."
+    },
   ];
 
   @override
@@ -82,7 +101,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _iniciarTimer();
   }
 
-  // OPTIMIZACIÓN 1: Precargar imágenes en memoria para evitar tirones
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -91,9 +109,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  // OPTIMIZACIÓN 2: Lógica centralizada del Timer
   void _iniciarTimer() {
-    _timer?.cancel(); // Cancelamos cualquier timer previo para evitar conflictos
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 4), (Timer timer) {
       if (_paginaActual < _datosOnboarding.length - 1) {
         _paginaActual++;
@@ -104,7 +121,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (_pageController.hasClients) {
         _pageController.animateToPage(
           _paginaActual,
-          // OPTIMIZACIÓN 3: Curva más suave y natural
           duration: const Duration(milliseconds: 600),
           curve: Curves.easeInOutCubic, 
         );
@@ -125,19 +141,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final double alto = size.height;
 
     return Scaffold(
-      // Listener para detectar si el usuario toca la pantalla
       body: Listener(
         onPointerDown: (_) {
-          // Si el usuario toca, paramos el timer para no pelear con él
           _timer?.cancel();
         },
         onPointerUp: (_) {
-          // Cuando suelta, reiniciamos el timer
           _iniciarTimer();
         },
         child: Stack(
           children: [
-            // 1. CAPA DE FONDO
+            // CAPA DE FONDO
             PageView.builder(
               controller: _pageController,
               itemCount: _datosOnboarding.length,
@@ -150,7 +163,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 return Image.asset(
                   _datosOnboarding[index]["imagen"]!,
                   fit: BoxFit.cover,
-                  // GaplessPlayback evita parpadeos blancos al cambiar rápido
                   gaplessPlayback: true, 
                   color: Colors.black.withValues(alpha: 0.5),
                   colorBlendMode: BlendMode.darken,
@@ -158,7 +170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               },
             ),
 
-            // 2. CAPA DE CONTENIDO
+            // CAPA DE CONTENIDO
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
@@ -183,11 +195,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             ]
                           ),
                           child: Image.asset(
-                            "assets/images/logo samR.png",
+                            "assets/images/logo.png", 
                             height: alto * 0.15, 
                             width: alto * 0.15,
                             fit: BoxFit.contain,
-                            // GaplessPlayback también aquí por si acaso
                             gaplessPlayback: true,
                           ),
                         ),
@@ -213,7 +224,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     
                     const Spacer(flex: 10),
 
-                    // TEXTO DEL CARRUSEL (Con animación suave)
+                    // TEXTO DEL CARRUSEL
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 500),
                       transitionBuilder: (Widget child, Animation<double> animation) {
@@ -250,33 +261,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       width: double.infinity,
                       height: 55,
                       child: ElevatedButton(
-                        onPressed: () {
-                          // Reiniciamos el timer al interactuar
-                          _iniciarTimer(); 
-                          if (_paginaActual == _datosOnboarding.length - 1) {
-                            _irALogin();
-                          } else {
-                            _pageController.nextPage(
-                              duration: const Duration(milliseconds: 600),
-                              curve: Curves.easeInOutCubic,
-                            );
-                          }
-                        },
+                        onPressed: _irARegistro, 
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Theme.of(context).colorScheme.primary,
                           elevation: 5,
                         ),
-                        child: Text(
-                          _paginaActual == _datosOnboarding.length - 1 
-                              ? "EMPEZAR" 
-                              : "SIGUIENTE",
-                        ),
+                        child: const Text("EMPEZAR"), 
                       ),
                     ),
 
                     SizedBox(height: alto * 0.02),
 
-                    // ENLACE A LOGIN
+                    //ENLACE A LOGIN
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -310,8 +306,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildPunto(int index) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300), // Suavizado
-      curve: Curves.easeOut, // Curva suave
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
       margin: const EdgeInsets.symmetric(horizontal: 5),
       height: 10,
       width: _paginaActual == index ? 25 : 10,
@@ -324,11 +320,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  // Navegación al Login (Botón de texto abajo)
   void _irALogin() {
     _timer?.cancel();
     Navigator.pushReplacement(
       context, 
       MaterialPageRoute(builder: (context) => const PantallaLogin()),
+    );
+  }
+
+  // Navegación al Registro (Botón Grande "Empezar")
+  void _irARegistro() {
+    _timer?.cancel();
+    Navigator.pushReplacement(
+      context, 
+      MaterialPageRoute(builder: (context) => const PantallaRegistro()),
     );
   }
 }
