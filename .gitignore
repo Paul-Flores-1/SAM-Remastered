@@ -9,4 +9,5 @@ __pycache__/
 *.exe
 *.dll
 android/app/google-services.json
+.gitignore
 BASE DE DATOS/pgAdmin 4/
