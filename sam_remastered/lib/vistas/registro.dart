@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sam_remastered/vistas/principal.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PantallaRegistro extends StatefulWidget {
   const PantallaRegistro({super.key});
@@ -72,7 +74,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         );
         setState(() => _pasoActual++);
       } else {
-        _registrarUsuario();
+        _registrarUsuario(); // Llama a la funcion de Firebase
       }
     }
   }
@@ -121,7 +123,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                     value: (_pasoActual + 1) / 3,
                     backgroundColor: Colors.grey.shade200,
                     color: Theme.of(context).colorScheme.secondary,
-                    minHeight: 8, // Más gordita y amigable
+                    minHeight: 8, 
                   ),
                 ),
               ),
@@ -159,7 +161,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                     onPressed: _siguientePaso,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), // Menos redondo, más pro
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), 
                       elevation: 0, 
                     ),
                     child: Text(
@@ -176,7 +178,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  // VISTAS POR PASOS
+  // --- VISTAS POR PASOS ---
 
   Widget _buildPaso1Personal() {
     return SingleChildScrollView(
@@ -194,6 +196,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             const SizedBox(height: 20),
             _buildCampoTexto(_emailController, "Correo Electrónico", Icons.email_rounded, tipoTeclado: TextInputType.emailAddress),
             const SizedBox(height: 20),
+            // MODIFICACIÓN AQUI: Teclado de teléfono
             _buildCampoTexto(_telefonoController, "Número de Celular", Icons.phone_android_rounded, tipoTeclado: TextInputType.phone),
             const SizedBox(height: 20),
             _buildCampoTexto(_passwordController, "Contraseña", Icons.lock_rounded, esPassword: true),
@@ -257,6 +260,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             const SizedBox(height: 15),
             _buildCampoTexto(_contacto1NombreController, "Nombre (Ej. Mamá)", Icons.person_outline_rounded),
             const SizedBox(height: 15),
+            // MODIFICACIÓN AQUI: Teclado de teléfono
             _buildCampoTexto(_contacto1TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone),
 
             const SizedBox(height: 35),
@@ -265,6 +269,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             const SizedBox(height: 15),
             _buildCampoTexto(_contacto2NombreController, "Nombre", Icons.person_outline_rounded),
             const SizedBox(height: 15),
+            // MODIFICACIÓN AQUI: Teclado de teléfono
             _buildCampoTexto(_contacto2TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone),
             const SizedBox(height: 30),
           ],
@@ -273,7 +278,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  // WIDGETS AUXILIARES REDISEÑADOS
+  // --- WIDGETS AUXILIARES REDISEÑADOS ---
 
   Widget _buildTitulo(String texto) {
     return Text(
@@ -298,17 +303,20 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  
   Widget _buildCampoTexto(TextEditingController controller, String label, IconData icono, {bool esPassword = false, TextInputType tipoTeclado = TextInputType.text, int lineas = 1}) {
     return TextFormField(
       controller: controller,
       obscureText: esPassword,
-      keyboardType: tipoTeclado,
+      keyboardType: tipoTeclado, // <- Aquí aplica el tipo de teclado numérico si se pasa
       maxLines: lineas,
       style: const TextStyle(fontWeight: FontWeight.w500),
       validator: (value) {
         if (label.contains("Opcional")) return null;
         if (value == null || value.isEmpty) return 'Este campo es necesario';
+        // Validación básica extra para teléfono
+        if (tipoTeclado == TextInputType.phone && value.length < 10) {
+           return 'Ingresa al menos 10 dígitos';
+        }
         return null;
       },
       decoration: InputDecoration(
@@ -383,7 +391,6 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
       firstDate: DateTime(1950),
       lastDate: DateTime.now(),
       builder: (context, child) {
-        
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
@@ -401,33 +408,96 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     }
   }
 
-  void _registrarUsuario() {
-    debugPrint("--- REGISTRO COMPLETADO ---");
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle_outline_rounded, color: Colors.white),
-            SizedBox(width: 10),
-            Text("¡Cuenta creada con éxito!", style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        backgroundColor: Colors.green.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 2),
-      ),
+  // --- FUNCIÓN REAL DE REGISTRO EN FIREBASE ---
+  Future<void> _registrarUsuario() async {
+    // 1. Mostrar un indicador de carga en la pantalla
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) { 
+    try {
+      // 2. CREAR EL USUARIO EN FIREBASE AUTH
+      UserCredential credenciales = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // 3. GUARDAR EL PERFIL MÉDICO EN FIRESTORE
+      String uid = credenciales.user!.uid; 
+      
+      await FirebaseFirestore.instance.collection('usuarios').doc(uid).set({
+        'nombre': _nombreController.text.trim(),
+        'email': _emailController.text.trim(),
+        'telefono': _telefonoController.text.trim(),
+        'fechaNacimiento': _fechaNacController.text.trim(),
+        'sexo': _sexoSeleccionado,
+        'tipoSangre': _tipoSangreSeleccionado,
+        'alergias': _alergiasController.text.trim(),
+        'contactoPrincipal': {
+          'nombre': _contacto1NombreController.text.trim(),
+          'telefono': _contacto1TelController.text.trim(),
+        },
+        'contactoSecundario': {
+          'nombre': _contacto2NombreController.text.trim(),
+          'telefono': _contacto2TelController.text.trim(),
+        },
+        'fechaRegistro': FieldValue.serverTimestamp(), 
+      });
+
+      // 4. Quitar el circulo de carga
+      if (mounted) Navigator.pop(context);
+
+      // 5. Mostrar mensaje de éxito y Navegar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 10),
+                Text("¡Cuenta creada y datos guardados!", style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const PantallaPrincipal()),
           (route) => false, 
         );
       }
-    });
+
+    } on FirebaseAuthException catch (e) {
+      // Si falla Firebase Auth (ej. contraseña corta, correo repetido)
+      if (mounted) Navigator.pop(context); // Quitar carga
+      
+      String mensajeError = "Ocurrió un error al registrarse.";
+      if (e.code == 'weak-password') {
+        mensajeError = 'La contraseña es muy débil (Mínimo 6 caracteres).';
+      } else if (e.code == 'email-already-in-use') {
+        mensajeError = 'Este correo ya está registrado en otra cuenta.';
+      } else if (e.code == 'invalid-email') {
+        mensajeError = 'El formato del correo no es válido.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(mensajeError), backgroundColor: Colors.red.shade600),
+        );
+      }
+    } catch (e) {
+      // Si falla Firestore o el internet
+      if (mounted) Navigator.pop(context); 
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error de conexión: $e"), backgroundColor: Colors.red.shade600),
+        );
+      }
+    }
   }
 }

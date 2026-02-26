@@ -2,27 +2,41 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
-import 'package:sam_remastered/vistas/iniciosesion.dart';
-import 'package:sam_remastered/vistas/registro.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
+// --- IMPORTS DE FIREBASE Y TUS VISTAS ---
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
+
+import 'package:sam_remastered/vistas/iniciosesion.dart';
+import 'package:sam_remastered/vistas/registro.dart';
+import 'package:sam_remastered/vistas/principal.dart'; // Importante para que el StreamBuilder te lleve al mapa
+
 void main() async {
+  // Asegura que los widgets estén listos antes de arrancar los paquetes nativos
   WidgetsFlutterBinding.ensureInitialized();
 
-  //Bloquea la rotacion de pantalla :3
-  SystemChrome.setPreferredOrientations([
+  // --- INICIALIZAR FIREBASE ---
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Bloquea la rotacion de pantalla :3
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
+  // Optimización de mapas para Android
   final GoogleMapsFlutterPlatform mapsImplementation = GoogleMapsFlutterPlatform.instance;
   if (mapsImplementation is GoogleMapsFlutterAndroid) {
     mapsImplementation.useAndroidViewSurface = true;
+  }
 
-  // await Firebase.initializeApp(); 
   runApp(const SamApp());
-}}
+}
 
 class SamApp extends StatelessWidget {
   const SamApp({super.key});
@@ -58,7 +72,27 @@ class SamApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const OnboardingScreen(),
+      // --- LÓGICA DE INICIO DE SESIÓN AUTOMÁTICO ---
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // 1. Mientras revisa si hay alguien guardado en memoria
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Colors.white,
+              body: Center(child: CircularProgressIndicator(color: Color(0xFF1A237E))),
+            );
+          }
+          
+          // 2. Si encontró una sesión activa, nos vamos directo al Mapa
+          if (snapshot.hasData) {
+            return const PantallaPrincipal();
+          }
+          
+          // 3. Si no hay sesión, mostramos las motitos (Onboarding)
+          return const OnboardingScreen();
+        }
+      ),
     );
   }
 }

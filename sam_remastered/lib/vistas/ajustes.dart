@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sam_remastered/vistas/perfil.dart';
 
+// --- NUEVOS IMPORTS PARA CERRAR SESIÓN ---
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sam_remastered/main.dart'; 
+
 class PantallaAjustes extends StatefulWidget {
   const PantallaAjustes({super.key});
 
@@ -104,13 +108,30 @@ class _PantallaAjustesState extends State<PantallaAjustes> {
 
             const SizedBox(height: 40),
 
-            // BOTÓN CERRAR SESIÓN
+            // --- BOTÓN CERRAR SESIÓN FUNCIONAL ---
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  debugPrint("Cerrando sesión...");
+                onPressed: () async {
+                  // 1. Mostrar circulo de carga
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(child: CircularProgressIndicator(color: Color(0xFF1A237E))),
+                  );
+
+                  // 2. Cerrar sesión en Firebase
+                  await FirebaseAuth.instance.signOut();
+
+                  // 3. Navegar a la pantalla inicial borrando el historial
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const OnboardingScreen()), 
+                      (route) => false,
+                    );
+                  }
                 },
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text("CERRAR SESIÓN", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),

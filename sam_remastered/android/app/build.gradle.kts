@@ -1,9 +1,24 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services")
+    // END: FlutterFire Configuration
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// --- CÓDIGO AGREGADO PARA LEER local.properties ---
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.reader().use { reader ->
+        localProperties.load(reader)
+    }
+}
+// ---------------------------------------------------
 
 android {
     namespace = "com.example.sam_remastered"
@@ -26,7 +41,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders = [GOOGLE_API_KEY: localProperties.getProperty("GOOGLE_API_KEY", "")]
+        
+        // ¡Aquí ya funcionará perfecto porque ya definimos localProperties arriba!
+        manifestPlaceholders["GOOGLE_API_KEY"] = localProperties.getProperty("GOOGLE_API_KEY", "")
     }
 
     buildTypes {

@@ -5,6 +5,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:sam_remastered/vistas/perfil.dart';
 import 'package:sam_remastered/vistas/ajustes.dart';
 
+// IMPORTS DE FIREBASE
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PantallaPrincipal extends StatefulWidget {
   const PantallaPrincipal({super.key});
@@ -29,6 +32,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     return Scaffold(
       body: Stack(
         children: [
+          // 1. MAPA DE FONDO
           SizedBox(
             height: size.height,
             width: double.infinity,
@@ -49,6 +53,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             ),
           ),
 
+          // 2. BOTONES SUPERIORES FLOTANTES
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
@@ -56,7 +61,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   
-                  // Botón del Engrane (Arriba a la izquierda)
+                  // Botón del Engrane
                   _botonCircular(Icons.settings, () {
                     Navigator.push(
                       context,
@@ -64,7 +69,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                     );
                   }),
                   
-                  // Indicador negro "Acapulco, Gro." (Centro arriba)
+                  // Indicador de Ubicación
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -83,7 +88,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                     ),
                   ),
 
-                  // Botón de Alerta con el triángulo (Arriba a la derecha)
+                  // Botón de Alerta Manual
                   _botonCircular(Icons.warning_amber_rounded, () {
                     debugPrint("ALERTA MANUAL");
                   }, esAlerta: true),
@@ -92,6 +97,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             ),
           ),
 
+          // 3. PANEL DESLIZABLE
           DraggableScrollableSheet(
             initialChildSize: 0.45, 
             minChildSize: 0.12,     
@@ -113,6 +119,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
+                      // Manija superior
                       Center(
                         child: Container(
                           height: 5,
@@ -125,12 +132,12 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                       ),
                       const SizedBox(height: 15),
 
+                      // Pestañas
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            //  Las 3 Pestañas (Usuario, Moto, Escudo)
                             _construirTab(0, Icons.person),
                             _construirTab(1, Icons.motorcycle), 
                             _construirTab(2, Icons.security), 
@@ -140,6 +147,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
                       const SizedBox(height: 20),
 
+                      // Contenido de las Pestañas
                       Container(
                         constraints: BoxConstraints(
                           minHeight: size.height * 0.8, 
@@ -179,135 +187,251 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   // --- 1. PESTAÑA USUARIO ---
   Widget _vistaUsuario() {
-    return Column(
-      key: const ValueKey<int>(0),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 10),
+    final User? user = FirebaseAuth.instance.currentUser;
 
-        // Tarjeta Principal de Perfil
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.grey.shade100),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+    if (user == null) {
+      return const Center(child: Text("No hay sesión iniciada"));
+    }
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('usuarios').doc(user.uid).snapshots(),
+      builder: (context, snapshot) {
+        
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const Center(child: Text("No se encontraron datos del usuario."));
+        }
+
+        // --- EXTRACCIÓN DE DATOS DE FIRESTORE ---
+        var userData = snapshot.data!.data() as Map<String, dynamic>;
+        String nombre = userData['nombre'] ?? 'Usuario';
+        String inicial = nombre.isNotEmpty ? nombre[0].toUpperCase() : 'U';
+
+        // Extrayendo los contactos
+        var c1 = userData['contactoPrincipal'] as Map<String, dynamic>?;
+        var c2 = userData['contactoSecundario'] as Map<String, dynamic>?;
+        
+        String n1 = (c1?['nombre']?.toString().isNotEmpty == true) ? c1!['nombre'] : 'Sin asignar';
+        String t1 = (c1?['telefono']?.toString().isNotEmpty == true) ? c1!['telefono'] : '';
+        
+        String n2 = (c2?['nombre']?.toString().isNotEmpty == true) ? c2!['nombre'] : 'Sin asignar';
+        String t2 = (c2?['telefono']?.toString().isNotEmpty == true) ? c2!['telefono'] : '';
+
+        // Formatear el texto para el subtitulo del botón
+        String subtituloContactos = "1. $n1 ($t1)\n2. $n2 ($t2)".trim();
+
+        return Column(
+          key: const ValueKey<int>(0),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+
+            // Tarjeta Principal de Perfil
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade100),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const PantallaPerfil()),
-              );
-            },
-            child: Row(
-              children: [
-                const Hero(
-                  tag: 'avatar_perfil',
-                  child: CircleAvatar(
-                    radius: 35,
-                    backgroundColor: Color(0xFF1A237E),
-                    child: Text("P", style: TextStyle(color: Colors.white, fontSize: 28)),
-                  ),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Paul Flores",
-                        style: GoogleFonts.montserrat(
-                          fontWeight: FontWeight.bold, 
-                          fontSize: 20,
-                          color: Colors.black87
-                        ),
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PantallaPerfil()),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Hero(
+                      tag: 'avatar_perfil',
+                      child: CircleAvatar(
+                        radius: 35,
+                        backgroundColor: const Color(0xFF1A237E),
+                        child: Text(inicial, style: const TextStyle(color: Colors.white, fontSize: 28)),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6F00).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          "Dispositivo Desactivado",
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nombre,
+                            style: GoogleFonts.montserrat(
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 20,
+                              color: Colors.black87
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6F00).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              "Dispositivo Desactivado",
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.secondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[300]),
+                  ],
                 ),
-                Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[300]),
-              ],
+              ),
             ),
-          ),
-        ),
 
-        const SizedBox(height: 25),
+            const SizedBox(height: 25),
 
-        Text(
-          "Gestión de Seguridad",
-          style: GoogleFonts.montserrat(
-            fontSize: 16, 
-            fontWeight: FontWeight.bold,
-            color: Colors.grey[800]
-          ),
-        ),
-        const SizedBox(height: 15),
+            Text(
+              "Gestión de Seguridad",
+              style: GoogleFonts.montserrat(
+                fontSize: 16, 
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800]
+              ),
+            ),
+            const SizedBox(height: 15),
 
-        _buildBotonElegante(
-          titulo: "Contactos de Emergencia",
-          subtitulo: "Define a quién avisar en caso de accidente",
-          icon: Icons.group_add_rounded,
-          colorIcono: const Color(0xFF1A237E), 
-          onTap: () {},
-        ),
+            // BOTÓN DE CONTACTOS CON DATOS REALES
+            _buildBotonElegante(
+              titulo: "Contactos de Emergencia",
+              subtitulo: subtituloContactos, // <--- AQUI SE MUESTRAN LOS NOMBRES Y NÚMEROS
+              icon: Icons.group_add_rounded,
+              colorIcono: const Color(0xFF1A237E), 
+              onTap: () {
+                _mostrarContactosDialog(context, n1, t1, n2, t2);
+              },
+            ),
 
-        const SizedBox(height: 15),
+            const SizedBox(height: 15),
 
-        // Boton QR
-        _buildBotonElegante(
-          titulo: "Mi Código QR Médico",
-          subtitulo: "Comparte tus datos vitales al instante",
-          icon: Icons.qr_code_scanner_rounded,
-          colorIcono: const Color(0xFF6200EA), 
-          onTap: () {
-             _mostrarCodigoQR(context); 
-          },
-        ),
+            // Botón QR
+            _buildBotonElegante(
+              titulo: "Mi Código QR Médico",
+              subtitulo: "Comparte tus datos vitales al instante",
+              icon: Icons.qr_code_scanner_rounded,
+              colorIcono: const Color(0xFF6200EA), 
+              onTap: () {
+                 _mostrarCodigoQR(context, userData); 
+              },
+            ),
 
-        const SizedBox(height: 30),
+            const SizedBox(height: 30),
 
-        Text(
-          "Artículos Recientes",
-          style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 15),
-        
-        _buildArticuloCard(
-          "Mantenimiento Básico", 
-          "Aprende a revisar los frenos de tu moto antes de salir.",
-          Icons.build_circle_outlined
-        ),
-        
-        const SizedBox(height: 50),
-      ],
+            Text(
+              "Artículos Recientes",
+              style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 15),
+            
+            _buildArticuloCard(
+              "Mantenimiento Básico", 
+              "Aprende a revisar los frenos de tu moto antes de salir.",
+              Icons.build_circle_outlined
+            ),
+            
+            const SizedBox(height: 50),
+          ],
+        );
+      }
     );
   }
 
-  void _mostrarCodigoQR(BuildContext context) {
+  // --- POPUPS ---
+  
+  // Popup para mostrar los contactos grandes
+  void _mostrarContactosDialog(BuildContext context, String n1, String t1, String n2, String t2) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.group_rounded, color: Color(0xFF1A237E)),
+                    const SizedBox(width: 10),
+                    Text("Red de Apoyo", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 18)),
+                  ],
+                ),
+                const Divider(height: 30),
+                
+                // Contacto 1
+                const Text("CONTACTO PRINCIPAL", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(backgroundColor: Colors.red.shade50, child: const Icon(Icons.favorite, color: Colors.red, size: 20)),
+                  title: Text(n1, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(t1),
+                ),
+                
+                const SizedBox(height: 10),
+
+                // Contacto 2
+                const Text("CONTACTO SECUNDARIO", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(backgroundColor: Colors.blue.shade50, child: const Icon(Icons.person, color: Colors.blue, size: 20)),
+                  title: Text(n2, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(t2),
+                ),
+
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[100],
+                      foregroundColor: Colors.black87,
+                      elevation: 0,
+                    ),
+                    child: const Text("CERRAR"),
+                  ),
+                )
+              ],
+            ),
+          ),
+        );
+      }
+    );
+  }
+
+  // Popup del QR Médico
+  void _mostrarCodigoQR(BuildContext context, Map<String, dynamic> userData) {
+    String nombre = userData['nombre'] ?? 'Usuario';
+    String tipoSangre = userData['tipoSangre'] ?? 'N/A';
+    String alergias = userData['alergias'] ?? '';
+    
+    String textoMedico = alergias.isEmpty 
+        ? "$tipoSangre | Sin alergias registradas" 
+        : "$tipoSangre | Alergia: $alergias";
+
     showDialog(
       context: context,
       builder: (context) {
@@ -334,8 +458,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                   child: const Icon(Icons.qr_code_2_rounded, size: 180, color: Colors.black87),
                 ),
                 const SizedBox(height: 25),
-                const Text("Paul Flores", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const Text("O+ | Alergia: Penicilina", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), textAlign: TextAlign.center),
+                const SizedBox(height: 4),
+                Text(textoMedico, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+                
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
@@ -379,7 +505,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  // --- 3. PESTAÑA SEGURIDAD / TELEMETRÍA (NUEVA) ---
+  // --- 3. PESTAÑA SEGURIDAD / TELEMETRÍA ---
   Widget _vistaSeguridad() {
     return Column(
       key: const ValueKey<int>(2),
@@ -472,7 +598,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
   
-  //WIDGETS AUXILIARES
+  // --- WIDGETS AUXILIARES ---
   
   Widget _buildBotonElegante({
     required String titulo, 
@@ -564,7 +690,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  // Para la Cuadrícula de Telemetría
   Widget _buildStatCard(String titulo, String valor, String unidad, IconData icono, Color color) {
     return Container(
       padding: const EdgeInsets.all(15),
@@ -596,7 +721,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  // Para la Lista de Historial
   Widget _buildIncidenteItem({required String fecha, required String detalle, required bool esPositivo}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
