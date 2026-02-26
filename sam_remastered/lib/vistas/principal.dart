@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart'; 
 import 'package:sam_remastered/vistas/perfil.dart';
 import 'package:sam_remastered/vistas/ajustes.dart';
+import 'package:sam_remastered/vistas/alerta_dialog.dart';
+
 
 // IMPORTS DE FIREBASE
 import 'package:firebase_auth/firebase_auth.dart';
@@ -90,8 +92,13 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
                   // Botón de Alerta Manual
                   _botonCircular(Icons.warning_amber_rounded, () {
-                    debugPrint("ALERTA MANUAL");
-                  }, esAlerta: true),
+  showDialog(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.4), // Oscurece un poco el fondo
+    barrierDismissible: false, // Evita que se cierre al tocar fuera de la caja
+    builder: (context) => const DialogoAlerta(),
+  );
+}, esAlerta: true),
                 ],
               ),
             ),

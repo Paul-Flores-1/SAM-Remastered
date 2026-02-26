@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sam_remastered/vistas/perfil.dart';
+import 'package:sam_remastered/vistas/privacidad.dart';
+import 'package:sam_remastered/vistas/terminos.dart';
 
 // --- NUEVOS IMPORTS PARA CERRAR SESIÓN ---
 import 'package:firebase_auth/firebase_auth.dart';
@@ -85,24 +87,28 @@ class _PantallaAjustesState extends State<PantallaAjustes> {
                     );
                   }
                 ),
-                _buildDivider(),
                 _buildItemNavegacion(
-                  titulo: "Privacidad y Datos", 
-                  icono: Icons.lock_outline_rounded, 
-                  colorIcono: Colors.grey.shade700,
-                  onTap: () {
-                    debugPrint("Abriendo Privacidad...");
-                  }
-                ),
-                _buildDivider(),
+  titulo: "Privacidad y Datos", 
+  icono: Icons.lock_outline_rounded, 
+  colorIcono: Colors.grey.shade700,
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PantallaPrivacidad()),
+    );
+  }
+),
                 _buildItemNavegacion(
-                  titulo: "Términos y Condiciones", 
-                  icono: Icons.description_outlined, 
-                  colorIcono: Colors.grey.shade700,
-                  onTap: () {
-                    debugPrint("Abriendo Términos...");
-                  }
-                ),
+  titulo: "Términos y Condiciones", 
+  icono: Icons.description_outlined, 
+  colorIcono: Colors.grey.shade700,
+  onTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PantallaTerminos()),
+    );
+  }
+),
               ]
             ),
 
