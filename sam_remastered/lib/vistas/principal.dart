@@ -1,15 +1,21 @@
 import 'dart:async'; 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Para leer la imagen en el PDF
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart'; 
 import 'package:sam_remastered/vistas/perfil.dart';
 import 'package:sam_remastered/vistas/ajustes.dart';
 import 'package:sam_remastered/vistas/alerta_dialog.dart';
 
-
 // IMPORTS DE FIREBASE
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+// IMPORTS PARA EL QR Y EL PDF
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class PantallaPrincipal extends StatefulWidget {
   const PantallaPrincipal({super.key});
@@ -92,13 +98,13 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
                   // Botón de Alerta Manual
                   _botonCircular(Icons.warning_amber_rounded, () {
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.4), // Oscurece un poco el fondo
-    barrierDismissible: false, // Evita que se cierre al tocar fuera de la caja
-    builder: (context) => const DialogoAlerta(),
-  );
-}, esAlerta: true),
+                    showDialog(
+                      context: context,
+                      barrierColor: Colors.black.withValues(alpha: 0.4), 
+                      barrierDismissible: false, 
+                      builder: (context) => const DialogoAlerta(),
+                    );
+                  }, esAlerta: true),
                 ],
               ),
             ),
@@ -318,10 +324,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             ),
             const SizedBox(height: 15),
 
-            // BOTÓN DE CONTACTOS CON DATOS REALES
+            // BOTÓN DE CONTACTOS 
             _buildBotonElegante(
               titulo: "Contactos de Emergencia",
-              subtitulo: subtituloContactos, // <--- AQUI SE MUESTRAN LOS NOMBRES Y NÚMEROS
+              subtitulo: subtituloContactos, 
               icon: Icons.group_add_rounded,
               colorIcono: const Color(0xFF1A237E), 
               onTap: () {
@@ -331,7 +337,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
             const SizedBox(height: 15),
 
-            // Botón QR
+            // BOTÓN QR MÉDICO (VUELVE A SER POPUP)
             _buildBotonElegante(
               titulo: "Mi Código QR Médico",
               subtitulo: "Comparte tus datos vitales al instante",
@@ -429,15 +435,36 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
-  // Popup del QR Médico
+  // ==========================================================
+  // VENTANA EMERGENTE: CÓDIGO QR Y BOTÓN DE PDF
+  // ==========================================================
   void _mostrarCodigoQR(BuildContext context, Map<String, dynamic> userData) {
     String nombre = userData['nombre'] ?? 'Usuario';
     String tipoSangre = userData['tipoSangre'] ?? 'N/A';
-    String alergias = userData['alergias'] ?? '';
+    String alergias = userData['alergias'] ?? 'Ninguna';
     
-    String textoMedico = alergias.isEmpty 
+    // Extrayendo datos de los contactos
+    var c1 = userData['contactoPrincipal'] as Map<String, dynamic>?;
+    var c2 = userData['contactoSecundario'] as Map<String, dynamic>?;
+    String n1 = c1?['nombre'] ?? 'No asignado';
+    String t1 = c1?['telefono'] ?? '---';
+    String n2 = c2?['nombre'] ?? 'No asignado';
+    String t2 = c2?['telefono'] ?? '---';
+
+    String textoMedico = alergias == 'Ninguna' || alergias.isEmpty 
         ? "$tipoSangre | Sin alergias registradas" 
         : "$tipoSangre | Alergia: $alergias";
+
+    String datosQR = """
+🚨 SAM24 - EMERGENCIA MÉDICA 🚨
+Paciente: $nombre
+Sangre: $tipoSangre
+Alergias: $alergias
+
+📞 CONTACTOS DE EMERGENCIA:
+1) $n1: $t1
+2) $n2: $t2
+""";
 
     showDialog(
       context: context,
@@ -446,49 +473,175 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           backgroundColor: Colors.white,
           elevation: 10,
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text("Identidad SAM", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 22, color: const Color(0xFF1A237E))),
-                const SizedBox(height: 8),
-                Text("Escanea para ver el perfil médico en caso de emergencia.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                const SizedBox(height: 25),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, spreadRadius: 5)],
-                  ),
-                  child: const Icon(Icons.qr_code_2_rounded, size: 180, color: Colors.black87),
-                ),
-                const SizedBox(height: 25),
-                Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), textAlign: TextAlign.center),
-                const SizedBox(height: 4),
-                Text(textoMedico, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
-                
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  height: 55, 
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[100],
-                      foregroundColor: Colors.black87,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("Identidad SAM", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 22, color: const Color(0xFF1A237E))),
+                  const SizedBox(height: 8),
+                  Text("Descarga tu código, imprímelo como calcomanía y pégalo en tu moto o casco.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                  const SizedBox(height: 25),
+                  
+                  // EL CÓDIGO QR (CON STACK PARA QUE NO FALLE LA IMAGEN)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, spreadRadius: 5)],
                     ),
-                    child: const Text("CERRAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        QrImageView(
+                          data: datosQR,
+                          version: QrVersions.auto,
+                          size: 180.0,
+                          errorCorrectionLevel: QrErrorCorrectLevel.H, 
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Image.asset(
+                            'assets/images/cruz_roja.png',
+                            width: 35,
+                            height: 35,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  
+                  const SizedBox(height: 25),
+                  Text(nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), textAlign: TextAlign.center),
+                  const SizedBox(height: 4),
+                  Text(textoMedico, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+                  
+                  const SizedBox(height: 30),
+                  
+                  // BOTÓN PARA GENERAR EL PDF STICKER
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context); // Ocultamos el pop-up QR para mostrar la ventana del PDF
+                        _generarYMostrarPDF(nombre, tipoSangre, alergias, n1, t1, n2, t2, datosQR);
+                      },
+                      icon: const Icon(Icons.print_rounded, color: Colors.white),
+                      label: const Text("DESCARGAR STICKER", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // BOTÓN DE CERRAR
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50, 
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[100],
+                        foregroundColor: Colors.black87,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      child: const Text("CERRAR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
       }
+    );
+  }
+
+  // ==========================================================
+  // LÓGICA DE GENERACIÓN DE PDF: STICKER PARA IMPRIMIR
+  // ==========================================================
+  Future<void> _generarYMostrarPDF(String nombre, String sangre, String alergias, String nc1, String tc1, String nc2, String tc2, String datosQR) async {
+    final pdf = pw.Document();
+
+    final ByteData bytesImagen = await rootBundle.load('assets/images/cruz_roja.png');
+    final cruzRojaPdf = pw.MemoryImage(bytesImagen.buffer.asUint8List());
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Center(
+            child: pw.Container(
+              width: 280,
+              height: 380,
+              decoration: pw.BoxDecoration(
+                color: PdfColors.white,
+                border: pw.Border.all(color: PdfColors.red700, width: 4),
+                borderRadius: pw.BorderRadius.circular(20),
+              ),
+              padding: const pw.EdgeInsets.all(25),
+              child: pw.Column(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                children: [
+                  pw.Text("SAM24", style: pw.TextStyle(fontSize: 32, fontWeight: pw.FontWeight.bold, color: PdfColors.red700)),
+                  pw.Text("ASISTENCIA MÉDICA", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 2)),
+                  
+                  pw.SizedBox(height: 25),
+                  
+                  // STACK DEL QR EN PDF
+                  pw.Stack(
+                    alignment: pw.Alignment.center,
+                    children: [
+                      pw.BarcodeWidget(
+                        barcode: pw.Barcode.qrCode(errorCorrectLevel: pw.BarcodeQRCorrectionLevel.high),
+                        data: datosQR,
+                        width: 180,
+                        height: 180,
+                      ),
+                      pw.Container(
+                        padding: const pw.EdgeInsets.all(4),
+                        decoration: const pw.BoxDecoration(
+                          color: PdfColors.white,
+                          shape: pw.BoxShape.circle,
+                        ),
+                        child: pw.Image(cruzRojaPdf, width: 35, height: 35),
+                      ),
+                    ],
+                  ),
+
+                  pw.SizedBox(height: 25),
+                  
+                  pw.Text("ESCANEAR EN CASO", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.red700)),
+                  pw.Text("DE EMERGENCIA", style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.red700)),
+                  
+                  pw.SizedBox(height: 15),
+                  pw.Text(nombre.toUpperCase(), style: pw.TextStyle(fontSize: 10, color: PdfColors.grey800)),
+                  pw.Text("SANGRE: $sangre", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: PdfColors.black)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Sticker_SAM24_$nombre.pdf', 
     );
   }
 
