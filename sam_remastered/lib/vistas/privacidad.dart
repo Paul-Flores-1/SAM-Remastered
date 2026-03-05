@@ -230,7 +230,7 @@ class _PantallaPrivacidadState extends State<PantallaPrivacidad> {
           Switch.adaptive(
             value: valor,
             onChanged: onChanged,
-            activeColor: const Color(0xFF1A237E),
+            activeThumbColor: const Color(0xFF1A237E),
           ),
         ],
       ),
