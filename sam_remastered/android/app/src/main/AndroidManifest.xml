@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.CAMERA"/>
 
     <application
-        android:label="SAM Remastered"
+        android:label="SAM 24"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">       
         

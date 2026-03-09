@@ -112,19 +112,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // Lista con 4 imágenes
   final List<Map<String, String>> _datosOnboarding = const [
     {
-      "imagen": "assets/images/carru1.png",
+      "imagen": "assets/images/carru10.png",
       "texto": "Respetá los límites de velocidad, en tu casa te esperan."
     },
     {
-      "imagen": "assets/images/carru2.png",
+      "imagen": "assets/images/carru20.png",
       "texto": "Tu seguridad es nuestra prioridad. SAM te cuida en cada ruta."
     },
     {
-      "imagen": "assets/images/carru3.png",
+      "imagen": "assets/images/carru30.png",
       "texto": "Usa tu casco y equipo de seguridad al salir."
     },
     {
-      "imagen": "assets/images/carru4.png",
+      "imagen": "assets/images/carru40.png",
       "texto": "SAM24. Te cuida las 24 horas del día."
     },
   ];
