@@ -194,13 +194,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
               },
               itemBuilder: (context, index) {
-                // Quitamos el RotatedBox y dejamos solo la imagen
-                return Image.asset(
-                  _datosOnboarding[index]["imagen"]!,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true, 
-                  color: Colors.black.withValues(alpha: 0.5),
-                  colorBlendMode: BlendMode.darken,
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // 1. La imagen pura, sin filtros que confundan a la GPU
+                    Image.asset(
+                      _datosOnboarding[index]["imagen"]!,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true, 
+                    ),
+                    // 2. Un contenedor negro semi-transparente superpuesto
+                    // Esto logra el efecto oscuro de forma 100% segura en cualquier celular
+                    Container(
+                      color: Colors.black.withValues(alpha: 0.5),
+                    ),
+                  ],
                 );
               },
             ),
