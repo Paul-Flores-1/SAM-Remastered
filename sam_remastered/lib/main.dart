@@ -11,8 +11,8 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
 
 import 'package:sam_remastered/vistas/iniciosesion.dart';
-import 'package:sam_remastered/vistas/registro.dart';
-import 'package:sam_remastered/vistas/principal.dart'; // Importante para que el StreamBuilder te lleve al mapa
+import 'package:sam_remastered/vistas/principal.dart';
+import 'package:sam_remastered/vistas/terminos.dart'; 
 
 void main() async {
   // Asegura que los widgets estén listos antes de arrancar los paquetes nativos
@@ -112,19 +112,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // Lista con 4 imágenes
   final List<Map<String, String>> _datosOnboarding = const [
     {
-      "imagen": "assets/images/carru1.jpg",
+      "imagen": "assets/images/carru1.png",
       "texto": "Respetá los límites de velocidad, en tu casa te esperan."
     },
     {
-      "imagen": "assets/images/carru2.jpg",
+      "imagen": "assets/images/carru2.png",
       "texto": "Tu seguridad es nuestra prioridad. SAM te cuida en cada ruta."
     },
     {
-      "imagen": "assets/images/carru3.jpg",
+      "imagen": "assets/images/carru3.png",
       "texto": "Usa tu casco y equipo de seguridad al salir."
     },
     {
-      "imagen": "assets/images/carru4.jpg",
+      "imagen": "assets/images/carru4.png",
       "texto": "SAM24. Te cuida las 24 horas del día."
     },
   ];
@@ -194,6 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 });
               },
               itemBuilder: (context, index) {
+                // Quitamos el RotatedBox y dejamos solo la imagen
                 return Image.asset(
                   _datosOnboarding[index]["imagen"]!,
                   fit: BoxFit.cover,
@@ -368,7 +369,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _timer?.cancel();
     Navigator.pushReplacement(
       context, 
-      MaterialPageRoute(builder: (context) => const PantallaRegistro()),
+      MaterialPageRoute(builder: (context) => const PantallaTerminos()),
     );
   }
 }

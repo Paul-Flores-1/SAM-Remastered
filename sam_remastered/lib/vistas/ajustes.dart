@@ -103,11 +103,14 @@ class _PantallaAjustesState extends State<PantallaAjustes> {
   icono: Icons.description_outlined, 
   colorIcono: Colors.grey.shade700,
   onTap: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const PantallaTerminos()),
-    );
-  }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    
+                    builder: (context) => const PantallaTerminos(soloLectura: true), 
+                  ),
+                );
+              },
 ),
               ]
             ),

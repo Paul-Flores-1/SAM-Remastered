@@ -39,9 +39,6 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   bool _ocultarPassword = true;
   final List<String> _listaAlergias = []; 
 
-  // VARIABLES PARA EL SMS
-  String _verificationId = ""; 
-
   final List<String> _tiposSangre = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   final List<String> _sexos = ['Masculino', 'Femenino'];
 
@@ -101,17 +98,16 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
       context: context,
       barrierDismissible: false,
       builder: (context) => DialogoConfirmacionRegistro(
-        // Al confirmar, ahora disparamos el SMS, no el registro final
-        onConfirmar: _iniciarVerificacionTelefono, 
+        onConfirmar: _ejecutarRegistroFinal, 
       ),
     );
   }
 
   // ==========================================================
-  // LÓGICA DE SEGURIDAD: VERIFICACIÓN POR SMS (FIREBASE)
+  // LÓGICA DE SEGURIDAD: VERIFICACIÓN POR CORREO (FIREBASE)
   // ==========================================================
-  Future<void> _iniciarVerificacionTelefono() async {
-    // Pantalla de carga mientras contactamos a la operadora
+  Future<void> _ejecutarRegistroFinal() async {
+    // Pantalla de carga
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -119,91 +115,14 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
 
     try {
-      // Se le agrega el +52 asumiendo que el usuario está en México
-      String telefonoInternacional = '+52${_telefonoController.text.trim()}';
-
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: telefonoInternacional,
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          // Algunos Androids leen el SMS solos. Si eso pasa, registramos directo.
-          Navigator.pop(context); // Cierra loading
-          await _ejecutarRegistroFinal(credencialTelefono: credential);
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          Navigator.pop(context); // Cierra loading
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error al enviar SMS: ${e.message}"), backgroundColor: Colors.red),
-          );
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          // El SMS se envió exitosamente
-          Navigator.pop(context); // Cierra loading
-          setState(() { _verificationId = verificationId; });
-          
-          // Abre la ventanita para poner el código
-          _mostrarDialogoOTP();
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          _verificationId = verificationId;
-        },
-      );
-    } catch (e) {
-      // ignore: use_build_context_synchronously
-      Navigator.pop(context);
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-    }
-  }
-
-  void _mostrarDialogoOTP() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => DialogoOTP(
-        telefono: _telefonoController.text,
-        onVerificar: (codigoSMS) async {
-          Navigator.pop(context); // Cierra el cuadro de OTP
-          
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => const Center(child: CircularProgressIndicator()),
-          );
-
-          try {
-            // Creamos la "llave" del teléfono
-            PhoneAuthCredential credencial = PhoneAuthProvider.credential(
-              verificationId: _verificationId,
-              smsCode: codigoSMS,
-            );
-            
-            // Si la llave es correcta, ejecutamos el registro en la BD
-            await _ejecutarRegistroFinal(credencialTelefono: credencial);
-            
-          } catch (e) {
-            // ignore: use_build_context_synchronously
-            Navigator.pop(context); // Cierra loading
-            // ignore: use_build_context_synchronously
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Código SMS incorrecto"), backgroundColor: Colors.red),
-            );
-          }
-        },
-      ),
-    );
-  }
-
-  // --- REGISTRO FIREBASE (FASE FINAL DESPUÉS DEL SMS) ---
-  Future<void> _ejecutarRegistroFinal({required PhoneAuthCredential credencialTelefono}) async {
-    try {
       // 1. Crear usuario con Correo y Contraseña
       UserCredential credenciales = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // 2. Vincular el teléfono verificado a esta nueva cuenta para máxima seguridad
-      await credenciales.user!.linkWithCredential(credencialTelefono);
+      // 2. Enviar el correo de verificación nativo de Firebase
+      await credenciales.user!.sendEmailVerification();
 
       // 3. Subir datos a Firestore
       String uid = credenciales.user!.uid; 
@@ -226,29 +145,22 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         'fechaRegistro': FieldValue.serverTimestamp(), 
       });
 
-      if (mounted) Navigator.pop(context); // Quita el loading
+      if (mounted) Navigator.pop(context); // Quita el loading inicial
 
+      // 4. Mostrar el nuevo diálogo bloqueante para que confirme el correo
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 10),
-                Text("¡Cuenta verificada y asegurada!", style: TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            backgroundColor: Colors.green.shade600,
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => DialogoEsperandoVerificacion(
+            email: _emailController.text.trim(),
           ),
         );
-
-        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PantallaPrincipal()), (route) => false);
       }
 
     } on FirebaseAuthException catch (e) {
       if (mounted) Navigator.pop(context); 
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error de Auth: ${e.message}"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.message}"), backgroundColor: Colors.red));
     }
   }
 
@@ -364,9 +276,27 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             const Text("Comencemos con lo básico para crear tu perfil.", style: TextStyle(color: Colors.grey, fontSize: 14)),
             const SizedBox(height: 30),
             
-            _buildCampoTexto(_nombreController, "Nombre Completo", Icons.person_rounded, maximo: 50),
+            _buildCampoTexto(_nombreController, "Nombre Completo", Icons.person_rounded, maximo: 40),
             const SizedBox(height: 20),
-            _buildCampoTexto(_emailController, "Correo Electrónico", Icons.email_rounded, tipoTeclado: TextInputType.emailAddress, maximo: 80),
+            _buildCampoTexto(
+              _emailController, 
+              "Correo Electrónico", 
+              Icons.email_rounded, 
+              tipoTeclado: TextInputType.emailAddress, 
+              validadorExtra: (valor) {
+                // Validación de formato de correo real
+                final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9-]+\.[a-zA-Z]+");
+                if (!emailRegex.hasMatch(valor!.trim())) {
+                  return 'Ingresa un correo válido';
+                }
+                // Validación de longitud (máximo 30 caracteres antes del @)
+                final partes = valor.trim().split('@');
+                if (partes[0].length > 30) {
+                  return 'Máximo 30 caracteres antes del @';
+                }
+                return null;
+              }
+            ),
             const SizedBox(height: 20),
             
             _buildCampoTexto(_telefonoController, "Número de Celular", Icons.phone_android_rounded, tipoTeclado: TextInputType.phone, maximo: 10),
@@ -378,11 +308,9 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               Icons.lock_rounded, 
               esPassword: true, 
               maximo: 30,
-              // EXPRESIÓN REGULAR AVANZADA PARA CONTRASEÑA
               validadorExtra: (valor) {
                 if (valor!.length < 9) return 'Mínimo 9 caracteres';
                 if (!RegExp(r'[a-zA-Z]').hasMatch(valor)) return 'Debe incluir al menos una letra';
-                // Verifica que haya al menos un carácter que NO sea ni letra ni número (es decir, un símbolo)
                 if (!RegExp(r'[^a-zA-Z0-9]').hasMatch(valor)) return 'Debe incluir al menos un símbolo';
                 return null;
               }
@@ -450,7 +378,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                   child: IconButton(
                     icon: const Icon(Icons.add_rounded, color: Colors.white),
                     onPressed: () {
-                      if (_alergiasController.text.trim().isNotEmpty && _listaAlergias.length < 10) { // Maximo 10 alergias
+                      if (_alergiasController.text.trim().isNotEmpty && _listaAlergias.length < 10) {
                         setState(() {
                           _listaAlergias.add(_alergiasController.text.trim());
                           _alergiasController.clear();
@@ -496,7 +424,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
 
             _buildSubtitulo("Contacto Principal"),
             const SizedBox(height: 15),
-            _buildCampoTexto(_contacto1NombreController, "Nombre (Ej. Mamá)", Icons.person_outline_rounded, maximo: 50),
+            _buildCampoTexto(_contacto1NombreController, "Nombre (Ej. Mamá)", Icons.person_outline_rounded, maximo: 40),
             const SizedBox(height: 15),
             _buildCampoTexto(_contacto1TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone, maximo: 10),
 
@@ -504,7 +432,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
 
             _buildSubtitulo("Contacto Secundario"),
             const SizedBox(height: 15),
-            _buildCampoTexto(_contacto2NombreController, "Nombre", Icons.person_outline_rounded, maximo: 50),
+            _buildCampoTexto(_contacto2NombreController, "Nombre", Icons.person_outline_rounded, maximo: 40),
             const SizedBox(height: 15),
             _buildCampoTexto(_contacto2TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone, maximo: 10),
             const SizedBox(height: 30),
@@ -530,12 +458,14 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
       obscureText: esPassword ? _ocultarPassword : false, 
       keyboardType: tipoTeclado, 
       maxLines: lineas,
-      maxLength: maximo, // APLICA EL LÍMITE DE CARACTERES
+      maxLength: maximo, 
       style: const TextStyle(fontWeight: FontWeight.w500),
       validator: (value) {
         if (label.contains("Opcional") || label.contains("Ej. Penicilina")) return null;
         if (value == null || value.trim().isEmpty) return 'Obligatorio';
         
+        // Esta validación ya se encarga de obligar a que sean exactamente 10 dígitos 
+        // para cualquier campo que sea tipo teléfono (tanto el tuyo como el de tus contactos)
         if (tipoTeclado == TextInputType.phone) {
           if (!RegExp(r'^[0-9]{10}$').hasMatch(value.trim())) return 'Ingresa exactamente 10 números';
         }
@@ -547,7 +477,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         labelText: label,
         labelStyle: TextStyle(color: Colors.grey.shade600),
         prefixIcon: Icon(icono, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
-        counterText: "", // Oculta el contador visual (ej. 0/50) para que se vea limpio
+        counterText: "", 
         suffixIcon: esPassword ? IconButton(
           icon: Icon(_ocultarPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.grey.shade600),
           onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
@@ -609,7 +539,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   }
 }
 
-// WIDGET 1: Cuadro de Confirmación (5 Segundos)
+// WIDGET 1: Cuadro de Confirmación de Datos
 class DialogoConfirmacionRegistro extends StatefulWidget {
   final VoidCallback onConfirmar;
   const DialogoConfirmacionRegistro({super.key, required this.onConfirmar});
@@ -626,9 +556,9 @@ class _DialogoConfirmacionRegistroState extends State<DialogoConfirmacionRegistr
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      // ignore: curly_braces_in_flow_control_structures
-      if (_segundos > 0) setState(() => _segundos--);
-      else {
+      if (_segundos > 0) {
+        setState(() => _segundos--);
+      } else {
         _timer?.cancel();
       }
     });
@@ -647,72 +577,111 @@ class _DialogoConfirmacionRegistroState extends State<DialogoConfirmacionRegistr
           Expanded(child: Text("¿Datos correctos?", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 18))),
         ],
       ),
-      content: const Text("Tus contactos y perfil médico deben ser precisos. Además, enviaremos un SMS a tu número para verificarlo.", style: TextStyle(fontSize: 14, height: 1.5)),
+      content: const Text("Tus contactos y perfil médico deben ser precisos. Te enviaremos un enlace a tu correo electrónico para verificar la cuenta.", style: TextStyle(fontSize: 14, height: 1.5)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("REVISAR DATOS", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
         ElevatedButton(
           onPressed: _segundos == 0 ? () { Navigator.pop(context); widget.onConfirmar(); } : null,
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A237E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: Text(_segundos > 0 ? "CONFIRMAR EN $_segundos..." : "SÍ, ENVIAR SMS", style: const TextStyle(fontWeight: FontWeight.bold)),
+          child: Text(_segundos > 0 ? "CONFIRMAR EN $_segundos..." : "SÍ, CREAR CUENTA", style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );
   }
 }
 
-
-// WIDGET 2: Cuadro para ingresar el código SMS (OTP)
-class DialogoOTP extends StatefulWidget {
-  final String telefono;
-  final Function(String) onVerificar;
-
-  const DialogoOTP({super.key, required this.telefono, required this.onVerificar});
+// WIDGET 2: Nuevo Cuadro Esperando Verificación
+class DialogoEsperandoVerificacion extends StatefulWidget {
+  final String email;
+  const DialogoEsperandoVerificacion({super.key, required this.email});
 
   @override
-  State<DialogoOTP> createState() => _DialogoOTPState();
+  State<DialogoEsperandoVerificacion> createState() => _DialogoEsperandoVerificacionState();
 }
 
-class _DialogoOTPState extends State<DialogoOTP> {
-  final _codigoController = TextEditingController();
+class _DialogoEsperandoVerificacionState extends State<DialogoEsperandoVerificacion> {
+  bool _verificando = false;
 
-  @override
-  void dispose() { _codigoController.dispose(); super.dispose(); }
+  Future<void> _comprobarVerificacion() async {
+    setState(() => _verificando = true);
+    
+    User? usuarioActual = FirebaseAuth.instance.currentUser;
+    await usuarioActual?.reload(); 
+    
+    usuarioActual = FirebaseAuth.instance.currentUser;
+
+    setState(() => _verificando = false);
+
+    if (usuarioActual != null && usuarioActual.emailVerified) {
+      if (mounted) {
+        Navigator.pop(context); 
+        Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PantallaPrincipal()), (route) => false);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Aún no detectamos la confirmación. Por favor, revisa tu bandeja de entrada o spam."),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          )
+        );
+      }
+    }
+  }
+
+  Future<void> _hacerloMasTarde() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) {
+      Navigator.pop(context);
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()), (route) => false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Center(child: Text("Verifica tu Teléfono", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 18))),
+      title: Column(
+        children: [
+          const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF1A237E), size: 50),
+          const SizedBox(height: 15),
+          Text("¡Verifica tu correo!", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 20), textAlign: TextAlign.center),
+        ],
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.sms_rounded, size: 50, color: Color(0xFF1A237E)),
+          Text("Hemos enviado un enlace a:", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700)),
+          const SizedBox(height: 5),
+          Text(widget.email, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 15),
-          Text("Ingresa el código de 6 dígitos que enviamos al +52 ${widget.telefono}", textAlign: TextAlign.center, style: const TextStyle(color: Colors.black87)),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _codigoController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, letterSpacing: 10, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              counterText: "",
-              filled: true, fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-            ),
-          ),
+          const Text("Abre tu correo, haz clic en el enlace y luego presiona el botón de abajo.", textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
         ],
       ),
+      actionsAlignment: MainAxisAlignment.center,
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("CANCELAR", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
-        ElevatedButton(
-          onPressed: () {
-            if (_codigoController.text.length == 6) widget.onVerificar(_codigoController.text);
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A237E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text("VERIFICAR", style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton(
+              onPressed: _verificando ? null : _comprobarVerificacion,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A237E), 
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+              ),
+              child: _verificando 
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text("YA HE CONFIRMADO EL CORREO", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: _verificando ? null : _hacerloMasTarde, 
+              child: const Text("Lo haré más tarde", style: TextStyle(color: Colors.grey))
+            ),
+          ],
+        )
       ],
     );
   }

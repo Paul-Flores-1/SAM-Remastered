@@ -1,8 +1,9 @@
 import 'dart:async'; 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Para leer la imagen en el PDF
+import 'package:flutter/services.dart'; 
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart'; 
+import 'package:geolocator/geolocator.dart'; // <-- PAQUETE DE GPS
 import 'package:sam_remastered/vistas/perfil.dart';
 import 'package:sam_remastered/vistas/ajustes.dart';
 import 'package:sam_remastered/vistas/alerta_dialog.dart';
@@ -28,10 +29,61 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   int _tabSeleccionada = 0;
   final Completer<GoogleMapController> _controller = Completer();
   
+  bool _permisoConcedido = false; // <-- Controla si mostramos el punto azul
+
+  // Coordenadas de inicio (Acapulco por defecto)
   static const CameraPosition _posicionInicial = CameraPosition(
     target: LatLng(16.8531, -99.8237), 
     zoom: 14.0,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    _obtenerUbicacionActual(); // <-- Ejecutamos la búsqueda al abrir la app
+  }
+
+  // ==========================================================
+  // LÓGICA DE GPS: PERMISOS Y CENTRADO DEL MAPA
+  // ==========================================================
+  Future<void> _obtenerUbicacionActual() async {
+    bool servicioHabilitado;
+    LocationPermission permiso;
+
+    // 1. Revisa si el GPS del celular está encendido
+    servicioHabilitado = await Geolocator.isLocationServiceEnabled();
+    if (!servicioHabilitado) return;
+
+    // 2. Revisa el estado de los permisos de la app
+    permiso = await Geolocator.checkPermission();
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+      if (permiso == LocationPermission.denied) return;
+    }
+    
+    if (permiso == LocationPermission.deniedForever) return;
+
+    // 3. Permiso concedido: Activamos el punto azul en el mapa
+    setState(() {
+      _permisoConcedido = true;
+    });
+
+    // 4. Obtenemos las coordenadas exactas del celular
+    Position posicion = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    // 5. Movemos la cámara hacia el usuario con una animación fluida
+    final GoogleMapController controlador = await _controller.future;
+    controlador.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(posicion.latitude, posicion.longitude),
+          zoom: 16.5, // Un zoom ideal para ver las calles
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,13 +99,14 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             child: GoogleMap(
               mapType: MapType.normal, 
               initialCameraPosition: _posicionInicial,
+              myLocationEnabled: _permisoConcedido, // <-- ENCIENDE EL PUNTO AZUL
+              myLocationButtonEnabled: false,       // <-- Oculta el botón por defecto de Google
               trafficEnabled: false,      
               buildingsEnabled: false,    
               indoorViewEnabled: false,   
               mapToolbarEnabled: false,   
               liteModeEnabled: false,
               zoomControlsEnabled: false, 
-              myLocationButtonEnabled: false, 
               compassEnabled: false,
               onMapCreated: (GoogleMapController controller) {
                 _controller.complete(controller);
@@ -77,7 +130,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                     );
                   }),
                   
-                  // Indicador de Ubicación
+                  // Indicador de Ubicación 
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
@@ -124,14 +177,21 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                     topRight: Radius.circular(30),
                   ),
                   boxShadow: [
-                    BoxShadow(color: Colors.black12, blurRadius: 20, spreadRadius: 5)
+                    BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -3))
                   ],
                 ),
-                child: SingleChildScrollView(
-                  controller: scrollController, 
-                  child: Column(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(30),
+                    topRight: Radius.circular(30),
+                  ),
+                  child: ListView(
+                    controller: scrollController, 
+                    padding: EdgeInsets.zero, 
+                    physics: const ClampingScrollPhysics(), 
                     children: [
                       const SizedBox(height: 10),
+                      
                       // Manija superior
                       Center(
                         child: Container(
@@ -161,23 +221,15 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                       const SizedBox(height: 20),
 
                       // Contenido de las Pestañas
-                      Container(
-                        constraints: BoxConstraints(
-                          minHeight: size.height * 0.8, 
-                        ),
-                        width: double.infinity,
+                      Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Column(
-                          children: [
-                             const SizedBox(height: 10),
-                             AnimatedSwitcher(
-                               duration: const Duration(milliseconds: 300),
-                               child: _construirContenidoPanel(),
-                             ),
-                             const SizedBox(height: 100), 
-                          ],
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          child: _construirContenidoPanel(),
                         ),
                       ),
+                      
+                      const SizedBox(height: 100), 
                     ],
                   ),
                 ),
@@ -233,7 +285,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         String n2 = (c2?['nombre']?.toString().isNotEmpty == true) ? c2!['nombre'] : 'Sin asignar';
         String t2 = (c2?['telefono']?.toString().isNotEmpty == true) ? c2!['telefono'] : '';
 
-        // Formatear el texto para el subtitulo del botón
         String subtituloContactos = "1. $n1 ($t1)\n2. $n2 ($t2)".trim();
 
         return Column(
@@ -337,7 +388,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
             const SizedBox(height: 15),
 
-            // BOTÓN QR MÉDICO (VUELVE A SER POPUP)
+            // BOTÓN QR MÉDICO
             _buildBotonElegante(
               titulo: "Mi Código QR Médico",
               subtitulo: "Comparte tus datos vitales al instante",
@@ -371,7 +422,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   // --- POPUPS ---
   
-  // Popup para mostrar los contactos grandes
   void _mostrarContactosDialog(BuildContext context, String n1, String t1, String n2, String t2) {
     showDialog(
       context: context,
@@ -443,7 +493,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     String tipoSangre = userData['tipoSangre'] ?? 'N/A';
     String alergias = userData['alergias'] ?? 'Ninguna';
     
-    // Extrayendo datos de los contactos
     var c1 = userData['contactoPrincipal'] as Map<String, dynamic>?;
     var c2 = userData['contactoSecundario'] as Map<String, dynamic>?;
     String n1 = c1?['nombre'] ?? 'No asignado';
@@ -484,7 +533,6 @@ Alergias: $alergias
                   Text("Descarga tu código, imprímelo como calcomanía y pégalo en tu moto o casco.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                   const SizedBox(height: 25),
                   
-                  // EL CÓDIGO QR (CON STACK PARA QUE NO FALLE LA IMAGEN)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -526,13 +574,12 @@ Alergias: $alergias
                   
                   const SizedBox(height: 30),
                   
-                  // BOTÓN PARA GENERAR EL PDF STICKER
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.pop(context); // Ocultamos el pop-up QR para mostrar la ventana del PDF
+                        Navigator.pop(context); 
                         _generarYMostrarPDF(nombre, tipoSangre, alergias, n1, t1, n2, t2, datosQR);
                       },
                       icon: const Icon(Icons.print_rounded, color: Colors.white),
@@ -547,7 +594,6 @@ Alergias: $alergias
 
                   const SizedBox(height: 10),
 
-                  // BOTÓN DE CERRAR
                   SizedBox(
                     width: double.infinity,
                     height: 50, 
@@ -602,7 +648,6 @@ Alergias: $alergias
                   
                   pw.SizedBox(height: 25),
                   
-                  // STACK DEL QR EN PDF
                   pw.Stack(
                     alignment: pw.Alignment.center,
                     children: [
@@ -645,22 +690,101 @@ Alergias: $alergias
     );
   }
 
-  // --- 2. PESTAÑA MOTO ---
+  // --- 2. PESTAÑA MOTO (NUEVO DISEÑO QR) ---
   Widget _vistaMoto() {
     return Column(
       key: const ValueKey<int>(1),
       children: [
-        const SizedBox(height: 20),
-        const Icon(Icons.two_wheeler, size: 80, color: Colors.grey),
         const SizedBox(height: 10),
-        Text("Estado de tu Moto", style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 5),
-        const Text("Sensor Bluetooth: Desconectado", style: TextStyle(color: Colors.red)),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: () {}, 
-          child: const Text("Conectar Sensor")
-        )
+        
+        // 1. Cabecera Visual
+        Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A237E).withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.qr_code_scanner_rounded, size: 50, color: Color(0xFF1A237E)),
+        ),
+        const SizedBox(height: 15),
+        Text(
+          "Vincula tu Sensor SAM",
+          style: GoogleFonts.montserrat(fontSize: 22, fontWeight: FontWeight.bold, color: const Color(0xFF1A237E)),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.red.shade200)
+          ),
+          child: const Text(
+            "Estado: Sin vincular",
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        ),
+        const SizedBox(height: 35),
+
+        // 2. Sección de Instrucciones
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10.0),
+          child: Column(
+            children: [
+              _buildPasoInstruccion(
+                Icons.search_rounded, 
+                "Localiza el QR", 
+                "Encuentra la etiqueta de seguridad impresa en la carcasa de tu dispositivo SAM."
+              ),
+              const SizedBox(height: 20),
+              _buildPasoInstruccion(
+                Icons.lock_person_rounded, 
+                "Escanea y Protege", 
+                "Vincúlalo a tu cuenta para registrarte como el único administrador autorizado."
+              ),
+              const SizedBox(height: 20),
+              _buildPasoInstruccion(
+                Icons.cloud_done_rounded, 
+                "Monitoreo 24/7", 
+                "Activa la conexión a la nube para recibir alertas de movimiento en tiempo real."
+              ),
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 40),
+
+        // 3. Zona de Acción (Botones)
+        SizedBox(
+          width: double.infinity,
+          height: 55,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              // TODO: Navegar a la pantalla de escáner de cámara
+            },
+            icon: const Icon(Icons.camera_alt_rounded, color: Colors.white),
+            label: const Text(
+              "ABRIR LECTOR QR",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1, color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A237E),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 0,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextButton(
+          onPressed: () {
+            // TODO: Mostrar popup para escribir el ID a mano
+          },
+          child: Text(
+            "¿No puedes escanear? Ingresa el ID manualmente",
+            style: TextStyle(color: Colors.grey.shade600, decoration: TextDecoration.underline, fontSize: 12),
+          ),
+        ),
+        const SizedBox(height: 40),
       ],
     );
   }
@@ -759,6 +883,33 @@ Alergias: $alergias
   }
   
   // --- WIDGETS AUXILIARES ---
+
+  Widget _buildPasoInstruccion(IconData icono, String titulo, String descripcion) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icono, color: Colors.blue.shade700, size: 22),
+        ),
+        const SizedBox(width: 15),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
+              const SizedBox(height: 4),
+              Text(descripcion, style: TextStyle(color: Colors.grey[600], fontSize: 13, height: 1.4)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
   
   Widget _buildBotonElegante({
     required String titulo, 

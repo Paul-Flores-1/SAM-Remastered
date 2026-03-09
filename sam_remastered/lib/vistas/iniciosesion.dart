@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:sam_remastered/vistas/registro.dart';
 import 'package:sam_remastered/vistas/principal.dart';
+import 'package:sam_remastered/vistas/terminos.dart';
+
+// IMPORTANTE: Agregamos Firebase Auth
+import 'package:firebase_auth/firebase_auth.dart';
 
 class PantallaLogin extends StatefulWidget {
   const PantallaLogin({super.key});
@@ -17,12 +20,108 @@ class _PantallaLoginState extends State<PantallaLogin> {
   
   bool _ocultarPassword = true; 
 
-  
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // ==========================================================
+  // LÓGICA DE INICIO DE SESIÓN CON FIREBASE
+  // ==========================================================
+  Future<void> _iniciarSesion() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // 1. Validar que no envíen campos vacíos
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Por favor, ingresa tu correo y contraseña."), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    // 2. Pantalla de carga
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator(color: Color(0xFF1A237E))),
+    );
+
+    try {
+      // 3. Petición a Firebase
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Si fue exitoso, cerramos la carga y vamos al Mapa
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const PantallaPrincipal()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) Navigator.pop(context); // Cerramos la carga si hay error
+      
+      // Manejo de errores amigable para el usuario
+      String mensajeError = "Ocurrió un error al iniciar sesión.";
+      if (e.code == 'invalid-credential' || e.code == 'user-not-found' || e.code == 'wrong-password') {
+        mensajeError = 'Correo o contraseña incorrectos.';
+      } else if (e.code == 'invalid-email') {
+        mensajeError = 'El formato del correo no es válido.';
+      } else if (e.code == 'user-disabled') {
+        mensajeError = 'Esta cuenta ha sido deshabilitada.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(mensajeError), backgroundColor: Colors.red.shade600),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error de conexión: $e"), backgroundColor: Colors.red.shade600),
+        );
+      }
+    }
+  }
+
+  // ==========================================================
+  // LÓGICA DE RECUPERACIÓN DE CONTRASEÑA
+  // ==========================================================
+  Future<void> _recuperarPassword() async {
+    final email = _emailController.text.trim();
+    
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Escribe tu correo arriba y presiona este botón para enviarte un enlace de recuperación."), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("¡Correo de recuperación enviado! Revisa tu bandeja de entrada o spam."), 
+            backgroundColor: Colors.green.shade600
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Error al enviar el correo. Verifica que esté bien escrito."), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -66,7 +165,6 @@ class _PantallaLoginState extends State<PantallaLogin> {
       
                 SizedBox(height: alto * 0.08),
       
-                
                 // Email
                 TextField(
                   controller: _emailController,
@@ -109,9 +207,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      
-                    },
+                    onPressed: _recuperarPassword, // AHORA ESTÁ CONECTADO A FIREBASE
                     child: const Text("¿Olvidaste tu contraseña?"),
                   ),
                 ),
@@ -123,17 +219,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // AQUÍ CONECTAREMOS CON FIREBASE AUTH MÁS ADELANTE
-                      debugPrint("Email: ${_emailController.text}");
-                      debugPrint("Pass: ${_passwordController.text}");
-
-                      // NAVEGACIÓN A LA PANTALLA PRINCIPAL (MAPA)
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => const PantallaPrincipal()),
-                      );
-                    },
+                    onPressed: _iniciarSesion, // CONECTADO A LA FUNCIÓN DE ARRIBA
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       shape: RoundedRectangleBorder(
@@ -143,7 +229,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                     ),
                     child: const Text(
                       "INGRESAR",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ),
@@ -173,7 +259,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const PantallaRegistro())
+                          MaterialPageRoute(builder: (context) => const PantallaTerminos())
                         );
                       },
                       child: Text(
