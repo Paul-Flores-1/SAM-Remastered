@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:sam_remastered/vistas/perfil.dart';
 import 'package:sam_remastered/vistas/ajustes.dart';
 import 'package:sam_remastered/vistas/alerta_dialog.dart';
+import 'package:sam_remastered/vistas/escaner_qr.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -757,9 +758,26 @@ Alergias: $alergias
         ),
         const SizedBox(height: 10),
         TextButton(
-          onPressed: () {
-            // TODO: Mostrar popup para escribir el ID a mano
-          },
+          onPressed: () async {
+              // Navegamos al escáner y esperamos a que nos devuelva un dato
+              final resultado = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PantallaEscanerQR()),
+              );
+
+              // Si el usuario escaneó algo (y no solo le dio a la flecha de regresar)
+              if (resultado != null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("ID escaneado: $resultado"),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  // TODO: En la Fase 3, aquí validaremos el ID contra Firebase
+                }
+              }
+            },
           child: Text(
             "¿No puedes escanear? Ingresa el ID manualmente",
             style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey.shade600, decoration: TextDecoration.underline, fontSize: 12),
