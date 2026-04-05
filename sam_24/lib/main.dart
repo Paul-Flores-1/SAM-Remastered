@@ -5,12 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
-// --- NUEVO IMPORT PARA MEMORIA LOCAL ---
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sam_remastered/services/background_service.dart'; 
 
 import 'package:sam_remastered/vistas/iniciosesion.dart';
 import 'package:sam_remastered/vistas/principal.dart';
@@ -24,6 +25,12 @@ final ValueNotifier<bool> metricNotifier = ValueNotifier(true); // true = Km/h
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  
+  await SAMBackgroundService.initializeService();
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
@@ -47,6 +54,8 @@ void main() async {
   if (mapsImplementation is GoogleMapsFlutterAndroid) {
     mapsImplementation.useAndroidViewSurface = true;
   }
+
+  
 
   runApp(const SamApp());
 }

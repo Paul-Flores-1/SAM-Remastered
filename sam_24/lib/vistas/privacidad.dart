@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+// --- IMPORTS DE FIREBASE Y NAVEGACIÓN ---
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:sam_remastered/main.dart'; 
+
+// --- IMPORT PARA EL SERVICIO DE SEGUNDO PLANO ---
+import 'package:flutter_background_service/flutter_background_service.dart';
+
 class PantallaPrivacidad extends StatefulWidget {
   const PantallaPrivacidad({super.key});
 
@@ -11,7 +19,21 @@ class PantallaPrivacidad extends StatefulWidget {
 class _PantallaPrivacidadState extends State<PantallaPrivacidad> {
   // Opciones de privacidad configurables por el usuario
   bool _telemetriaAnonima = true;
-  bool _ubicacionSegundoPlano = true;
+  bool _ubicacionSegundoPlano = false; // Por defecto apagado hasta consultar el estado
+
+  @override
+  void initState() {
+    super.initState();
+    _verificarEstadoServicio();
+  }
+
+  // Verifica si el servicio ya está corriendo para poner el switch en la posición correcta
+  Future<void> _verificarEstadoServicio() async {
+    final isRunning = await FlutterBackgroundService().isRunning();
+    setState(() {
+      _ubicacionSegundoPlano = isRunning;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +135,20 @@ class _PantallaPrivacidadState extends State<PantallaPrivacidad> {
                     subtitulo: "Permite que SAM detecte accidentes incluso si la pantalla de tu celular está apagada.",
                     valor: _ubicacionSegundoPlano,
                     isDark: isDark,
-                    onChanged: (val) => setState(() => _ubicacionSegundoPlano = val),
+                    onChanged: (val) async {
+                      setState(() => _ubicacionSegundoPlano = val);
+                      final service = FlutterBackgroundService();
+                      
+                      if (val) {
+                        // Arranca el motor de segundo plano
+                        bool start = await service.startService();
+                        debugPrint("Servicio SAM iniciado: $start");
+                      } else {
+                        // Manda la orden de apagado al servicio
+                        service.invoke('stopService');
+                        debugPrint("Servicio SAM detenido");
+                      }
+                    },
                   ),
                 ],
               ),
@@ -151,7 +186,7 @@ class _PantallaPrivacidadState extends State<PantallaPrivacidad> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text("Eliminar mi cuenta y datos", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.redAccent : Colors.red, fontSize: 16)),
+                              const Text("Eliminar mi cuenta y datos", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 16)),
                               const SizedBox(height: 4),
                               Text("Esta acción borrará todo permanentemente.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 12)),
                             ],
@@ -259,12 +294,12 @@ class _PantallaPrivacidadState extends State<PantallaPrivacidad> {
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
             const SizedBox(width: 10),
-            Text("¿Eliminar cuenta?", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18)),
+            Text("¿Eliminar cuenta?", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
           ],
         ),
         content: Text(
-          "Si eliminas tu cuenta, perderás todo tu perfil médico, contactos de emergencia y telemetría de la moto. Esta acción no se puede deshacer.",
-          style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.black87, height: 1.4),
+          "Tu perfil se borrará permanentemente. Esta acción cerrará tu sesión de inmediato.",
+          style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.black87),
         ),
         actions: [
           TextButton(
@@ -272,17 +307,40 @@ class _PantallaPrivacidadState extends State<PantallaPrivacidad> {
             child: Text("CANCELAR", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontWeight: FontWeight.bold)),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Aquí irá la lógica de Firebase: user.delete() y borrar su documento
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Función en desarrollo..."), backgroundColor: Colors.red));
+            onPressed: () async {
+              final User? user = FirebaseAuth.instance.currentUser;
+              final String? uid = user?.uid;
+
+              Navigator.pop(context); 
+
+              if (uid != null) {
+                FirebaseFirestore.instance.collection('usuarios').doc(uid).update({
+                  'nombre': FieldValue.delete(),
+                  'email': FieldValue.delete(),
+                  'telefono': FieldValue.delete(),
+                  'cuentaEliminada': true,
+                  'fechaBaja': FieldValue.serverTimestamp(),
+                }).catchError((e) => debugPrint("Firestore cleanup silent error: $e"));
+
+                user?.delete().catchError((e) => debugPrint("Auth delete silent error: $e"));
+              }
+
+              await FirebaseAuth.instance.signOut();
+
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const OnboardingScreen()), 
+                  (route) => false,
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.redAccent,
               foregroundColor: Colors.white,
               elevation: 0,
             ),
-            child: const Text("ELIMINAR", style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text("ELIMINAR AHORA", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

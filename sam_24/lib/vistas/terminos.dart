@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sam_remastered/vistas/registro.dart'; 
+import 'package:sam_remastered/main.dart'; // <-- IMPORTANTE: Para acceder al OnboardingScreen
 
 class PantallaTerminos extends StatefulWidget {
   // Variable para saber si venimos de Ajustes o de Registro
@@ -32,9 +33,20 @@ class _PantallaTerminosState extends State<PantallaTerminos> {
         backgroundColor: Colors.transparent,
         foregroundColor: isDark ? Colors.white : const Color(0xFF1A237E),
         elevation: 0,
+        // --- LÓGICA DE NAVEGACIÓN ANTI-PANTALLA NEGRA ---
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context), 
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              // Si no puede hacer pop, enviamos al main (Onboarding)
+              Navigator.pushReplacement(
+                context, 
+                MaterialPageRoute(builder: (context) => const OnboardingScreen())
+              );
+            }
+          }, 
         ),
       ),
       body: Column(

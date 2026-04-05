@@ -7,7 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:sam_remastered/vistas/perfil.dart';
 import 'package:sam_remastered/vistas/ajustes.dart';
 import 'package:sam_remastered/vistas/alerta_dialog.dart';
-import 'package:sam_remastered/vistas/escaner_qr.dart';
+import 'package:sam_remastered/vistas/escaner_qr.dart'; // <-- IMPORT DEL ESCÁNER
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -101,7 +101,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               zoomControlsEnabled: false, 
               compassEnabled: false,
               onMapCreated: (GoogleMapController controller) {
-                // Nota: Más adelante podemos inyectarle un JSON oscuro al mapa si isDark == true
                 _controller.complete(controller);
               },
             ),
@@ -737,12 +736,30 @@ Alergias: $alergias
         
         const SizedBox(height: 40),
 
+        // --- BOTÓN PRINCIPAL PARA ABRIR LA CÁMARA ---
         SizedBox(
           width: double.infinity,
           height: 55,
           child: ElevatedButton.icon(
-            onPressed: () {
-              // TODO: Navegar a la pantalla de escáner de cámara
+            onPressed: () async {
+              // 1. Navegamos al escáner y esperamos a que nos devuelva un dato
+              final resultado = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PantallaEscanerQR()),
+              );
+
+              // 2. Si el usuario escaneó algo (y no solo le dio a regresar)
+              if (resultado != null) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("ID escaneado: $resultado", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      backgroundColor: Colors.green.shade600,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
             },
             icon: const Icon(Icons.camera_alt_rounded, color: Colors.white),
             label: const Text(
@@ -757,27 +774,12 @@ Alergias: $alergias
           ),
         ),
         const SizedBox(height: 10),
+        
+        // --- BOTÓN SECUNDARIO PARA ENTRADA MANUAL ---
         TextButton(
-          onPressed: () async {
-              // Navegamos al escáner y esperamos a que nos devuelva un dato
-              final resultado = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const PantallaEscanerQR()),
-              );
-
-              // Si el usuario escaneó algo (y no solo le dio a la flecha de regresar)
-              if (resultado != null) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("ID escaneado: $resultado"),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  // TODO: En la Fase 3, aquí validaremos el ID contra Firebase
-                }
-              }
-            },
+          onPressed: () {
+            // TODO: Mostrar popup para escribir el ID a mano
+          },
           child: Text(
             "¿No puedes escanear? Ingresa el ID manualmente",
             style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey.shade600, decoration: TextDecoration.underline, fontSize: 12),
@@ -788,94 +790,139 @@ Alergias: $alergias
     );
   }
 
-  // --- 3. PESTAÑA SEGURIDAD / TELEMETRÍA ---
+  // --- 3. PESTAÑA SEGURIDAD / TELEMETRÍA (CONECTADA A FIREBASE) ---
   Widget _vistaSeguridad(bool isDark) {
-    return Column(
-      key: const ValueKey<int>(2),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 10),
-        Text(
-          "¿Qué tan bien conduces?", 
-          style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
-        ),
-        const SizedBox(height: 15),
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return Center(child: Text("No hay sesión", style: TextStyle(color: isDark ? Colors.white : Colors.black)));
 
-        // Tarjeta de Puntuación (Mantiene sus colores oscuros porque se ve genial)
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1A237E), Color(0xFF3949AB)], 
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('usuarios').doc(user.uid).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary));
+        if (!snapshot.hasData || !snapshot.data!.exists) return Center(child: Text("No hay datos de telemetría", style: TextStyle(color: isDark ? Colors.white : Colors.black)));
+
+        var datos = snapshot.data!.data() as Map<String, dynamic>;
+        var telemetria = datos['telemetria'] as Map<String, dynamic>?;
+
+        // Extraemos variables. Si no existen, mostramos "--"
+        int puntuacion = telemetria?['puntuacion'] ?? 0;
+        String scoreTexto = puntuacion > 0 ? puntuacion.toString() : "--";
+        String velMax = telemetria?['velocidadMax']?.toString() ?? "--";
+        String incMax = telemetria?['inclinacionMax']?.toString() ?? "--";
+        String incTotales = telemetria?['incidentesTotales']?.toString() ?? "--";
+        String velMin = telemetria?['velocidadMin']?.toString() ?? "--";
+        
+        List<dynamic> historial = telemetria?['historial'] ?? [];
+
+        // Lógica de colores para la puntuación
+        Color colorPuntuacion = Colors.greenAccent;
+        String textoPuntuacion = "Conductor Excelente";
+        
+        if (puntuacion > 0 && puntuacion < 80) {
+          colorPuntuacion = Colors.redAccent;
+          textoPuntuacion = "Precaución Sugerida";
+        } else if (puntuacion >= 80 && puntuacion < 90) {
+          colorPuntuacion = Colors.orangeAccent;
+          textoPuntuacion = "Conductor Bueno";
+        }
+
+        return Column(
+          key: const ValueKey<int>(2),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Text(
+              "¿Qué tan bien conduces?", 
+              style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
             ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF1A237E).withValues(alpha: 0.3), 
-                blurRadius: 10, 
-                offset: const Offset(0, 5)
-              )
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Puntuación de Seguridad", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  const SizedBox(height: 5),
-                  const Text("95 / 100", style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.greenAccent.withValues(alpha: 0.2), 
-                      borderRadius: BorderRadius.circular(10)
-                    ),
-                    child: const Text("Conductor Excelente", style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
+            const SizedBox(height: 15),
+
+            // Tarjeta de Puntuación
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1A237E), Color(0xFF3949AB)], 
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF1A237E).withValues(alpha: 0.3), 
+                    blurRadius: 10, 
+                    offset: const Offset(0, 5)
+                  )
                 ],
               ),
-              const Icon(Icons.shield_rounded, color: Colors.white, size: 60),
-            ],
-          ),
-        ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Puntuación de Seguridad", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      const SizedBox(height: 5),
+                      Text("$scoreTexto / 100", style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorPuntuacion.withValues(alpha: 0.2), 
+                          borderRadius: BorderRadius.circular(10)
+                        ),
+                        child: Text(textoPuntuacion, style: TextStyle(color: colorPuntuacion, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                  const Icon(Icons.shield_rounded, color: Colors.white, size: 60),
+                ],
+              ),
+            ),
 
-        const SizedBox(height: 25),
+            const SizedBox(height: 25),
 
-        Row(
-          children: [
-            Expanded(child: _buildStatCard("Velocidad Máx", "110", "km/h", Icons.speed_rounded, Colors.orange, isDark)),
-            const SizedBox(width: 15),
-            Expanded(child: _buildStatCard("Inclinación Máx", "42", "grados", Icons.screen_rotation_alt_rounded, Colors.blue, isDark)),
+            Row(
+              children: [
+                Expanded(child: _buildStatCard("Velocidad Máx", velMax, "km/h", Icons.speed_rounded, Colors.orange, isDark)),
+                const SizedBox(width: 15),
+                Expanded(child: _buildStatCard("Inclinación Máx", incMax, "grados", Icons.screen_rotation_alt_rounded, Colors.blue, isDark)),
+              ],
+            ),
+            const SizedBox(height: 15),
+            Row(
+              children: [
+                Expanded(child: _buildStatCard("Incidentes", incTotales, "totales", Icons.warning_amber_rounded, Colors.red, isDark)),
+                const SizedBox(width: 15),
+                Expanded(child: _buildStatCard("Vel. Mínima", velMin, "km/h", Icons.moving_rounded, Colors.teal, isDark)),
+              ],
+            ),
+
+            const SizedBox(height: 30),
+
+            Text(
+              "Historial de Incidentes", 
+              style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
+            ),
+            const SizedBox(height: 15),
+            
+            // Renderizamos la lista de historial desde Firebase
+            if (historial.isEmpty)
+               _buildIncidenteItem(fecha: "Hoy", detalle: "Sin incidentes recientes", esPositivo: true, isDark: isDark)
+            else
+              ...historial.map((incidente) {
+                return _buildIncidenteItem(
+                  fecha: incidente['fecha'] ?? 'Fecha desc.', 
+                  detalle: incidente['detalle'] ?? 'Detalle desc.', 
+                  esPositivo: incidente['esPositivo'] ?? true, 
+                  isDark: isDark
+                );
+              }),
+
+            const SizedBox(height: 50),
           ],
-        ),
-        const SizedBox(height: 15),
-        Row(
-          children: [
-            Expanded(child: _buildStatCard("Incidentes", "1", "totales", Icons.warning_amber_rounded, Colors.red, isDark)),
-            const SizedBox(width: 15),
-            Expanded(child: _buildStatCard("Vel. Mínima", "15", "km/h", Icons.moving_rounded, Colors.teal, isDark)),
-          ],
-        ),
-
-        const SizedBox(height: 30),
-
-        Text(
-          "Historial de Incidentes", 
-          style: GoogleFonts.montserrat(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
-        ),
-        const SizedBox(height: 15),
-        
-        _buildIncidenteItem(fecha: "24 Feb 2026", detalle: "Sin incidentes recientes", esPositivo: true, isDark: isDark),
-        _buildIncidenteItem(fecha: "12 Feb 2026", detalle: "Inclinación crítica (45°)", esPositivo: false, isDark: isDark),
-        _buildIncidenteItem(fecha: "05 Ene 2026", detalle: "Frenado brusco detectado", esPositivo: false, isDark: isDark),
-
-        const SizedBox(height: 50),
-      ],
+        );
+      }
     );
   }
   

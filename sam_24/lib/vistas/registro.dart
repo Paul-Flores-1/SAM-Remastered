@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math'; // <-- NUEVO IMPORT PARA GENERAR NÚMEROS ALEATORIOS
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sam_remastered/vistas/principal.dart';
@@ -104,10 +105,9 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   }
 
   // ==========================================================
-  // LÓGICA DE SEGURIDAD: VERIFICACIÓN POR CORREO (FIREBASE)
+  // LÓGICA DE REGISTRO CON TELEMETRÍA INICIAL
   // ==========================================================
   Future<void> _ejecutarRegistroFinal() async {
-    // Pantalla de carga
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -121,10 +121,31 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         password: _passwordController.text.trim(),
       );
 
-      // 2. Enviar el correo de verificación nativo de Firebase
+      // 2. Enviar el correo de verificación
       await credenciales.user!.sendEmailVerification();
 
-      // 3. Subir datos a Firestore
+      // --- GENERADOR DE ESTADÍSTICAS (MOCK DATA) ---
+      int scoreInicial = 80 + Random().nextInt(20); // Entre 80 y 99
+      int velMaxInicial = 60 + Random().nextInt(50); // Entre 60 y 109
+      int incMaxInicial = 25 + Random().nextInt(20); // Entre 25 y 44
+
+      Map<String, dynamic> telemetriaFalsa = {
+        'puntuacion': scoreInicial,
+        'velocidadMax': velMaxInicial,
+        'inclinacionMax': incMaxInicial,
+        'incidentesTotales': 0,
+        'velocidadMin': 10 + Random().nextInt(15),
+        'historial': [
+          {
+            'fecha': 'Hoy', 
+            'detalle': 'Cuenta de SAM creada exitosamente', 
+            'esPositivo': true
+          }
+        ]
+      };
+      // ----------------------------------------------
+
+      // 3. Subir datos a Firestore, incluyendo la telemetría
       String uid = credenciales.user!.uid; 
       await FirebaseFirestore.instance.collection('usuarios').doc(uid).set({
         'nombre': _nombreController.text.trim(),
@@ -142,12 +163,13 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
           'nombre': _contacto2NombreController.text.trim(),
           'telefono': _contacto2TelController.text.trim(),
         },
+        'telemetria': telemetriaFalsa, // <-- Se inyecta la telemetría aquí
         'fechaRegistro': FieldValue.serverTimestamp(), 
       });
 
-      if (mounted) Navigator.pop(context); // Quita el loading inicial
+      if (mounted) Navigator.pop(context); 
 
-      // 4. Mostrar el nuevo diálogo bloqueante para que confirme el correo
+      // 4. Mostrar el diálogo bloqueante para confirmar correo
       if (mounted) {
         showDialog(
           context: context,
@@ -165,31 +187,33 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   }
 
 
-  Widget _obtenerVistaPasoActual() {
-    if (_pasoActual == 0) return Container(key: const ValueKey(0), child: _buildPaso1Personal());
-    if (_pasoActual == 1) return Container(key: const ValueKey(1), child: _buildPaso2Medico());
-    return Container(key: const ValueKey(2), child: _buildPaso3Contactos());
+  Widget _obtenerVistaPasoActual(bool isDark) {
+    if (_pasoActual == 0) return Container(key: const ValueKey(0), child: _buildPaso1Personal(isDark));
+    if (_pasoActual == 1) return Container(key: const ValueKey(1), child: _buildPaso2Medico(isDark));
+    return Container(key: const ValueKey(2), child: _buildPaso3Contactos(isDark));
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return PopScope(
       canPop: _pasoActual == 0, 
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _pasoAnterior(); 
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         appBar: AppBar(
           title: Text(
             "Paso ${_pasoActual + 1} de 3", 
             style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 18)
           ),
           centerTitle: true,
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.transparent,
           foregroundColor: Theme.of(context).colorScheme.primary,
           elevation: 0,
-          leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20), onPressed: _pasoAnterior),
+          leading: IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: isDark ? Colors.white : Theme.of(context).colorScheme.primary), onPressed: _pasoAnterior),
         ),
         body: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
@@ -205,7 +229,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                       curve: Curves.easeOutCubic,
                       child: LinearProgressIndicator(
                         value: (_pasoActual + 1) / 3,
-                        backgroundColor: Colors.grey.shade200,
+                        backgroundColor: isDark ? Colors.grey[800] : Colors.grey.shade200,
                         color: Theme.of(context).colorScheme.secondary,
                         minHeight: 8, 
                       ),
@@ -227,14 +251,14 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                         ),
                       );
                     },
-                    child: _obtenerVistaPasoActual(),
+                    child: _obtenerVistaPasoActual(isDark),
                   ),
                 ),
 
                 Container(
                   padding: const EdgeInsets.all(24.0),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark ? const Color(0xFF121212) : Colors.white,
                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5))]
                   ),
                   child: SizedBox(
@@ -264,7 +288,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
 
   // --- VISTAS POR PASOS ---
 
-  Widget _buildPaso1Personal() {
+  Widget _buildPaso1Personal(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
       child: Form(
@@ -272,34 +296,29 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildTitulo("Tus Datos"),
-            const Text("Comencemos con lo básico para crear tu perfil.", style: TextStyle(color: Colors.grey, fontSize: 14)),
+            _buildTitulo("Tus Datos", isDark),
+            Text("Comencemos con lo básico para crear tu perfil.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14)),
             const SizedBox(height: 30),
             
-            _buildCampoTexto(_nombreController, "Nombre Completo", Icons.person_rounded, maximo: 40),
+            _buildCampoTexto(_nombreController, "Nombre Completo", Icons.person_rounded, maximo: 40, isDark: isDark),
             const SizedBox(height: 20),
             _buildCampoTexto(
               _emailController, 
               "Correo Electrónico", 
               Icons.email_rounded, 
               tipoTeclado: TextInputType.emailAddress, 
+              isDark: isDark,
               validadorExtra: (valor) {
-                // Validación de formato de correo real
                 final RegExp emailRegex = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9-]+\.[a-zA-Z]+");
-                if (!emailRegex.hasMatch(valor!.trim())) {
-                  return 'Ingresa un correo válido';
-                }
-                // Validación de longitud (máximo 30 caracteres antes del @)
+                if (!emailRegex.hasMatch(valor!.trim())) return 'Ingresa un correo válido';
                 final partes = valor.trim().split('@');
-                if (partes[0].length > 30) {
-                  return 'Máximo 30 caracteres antes del @';
-                }
+                if (partes[0].length > 30) return 'Máximo 30 caracteres antes del @';
                 return null;
               }
             ),
             const SizedBox(height: 20),
             
-            _buildCampoTexto(_telefonoController, "Número de Celular", Icons.phone_android_rounded, tipoTeclado: TextInputType.phone, maximo: 10),
+            _buildCampoTexto(_telefonoController, "Número de Celular", Icons.phone_android_rounded, tipoTeclado: TextInputType.phone, maximo: 10, isDark: isDark),
             const SizedBox(height: 20),
             
             _buildCampoTexto(
@@ -308,6 +327,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               Icons.lock_rounded, 
               esPassword: true, 
               maximo: 30,
+              isDark: isDark,
               validadorExtra: (valor) {
                 if (valor!.length < 9) return 'Mínimo 9 caracteres';
                 if (!RegExp(r'[a-zA-Z]').hasMatch(valor)) return 'Debe incluir al menos una letra';
@@ -323,6 +343,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               Icons.lock_clock_rounded, 
               esPassword: true,
               maximo: 30,
+              isDark: isDark,
               validadorExtra: (valor) {
                 if (valor != _passwordController.text) return 'Las contraseñas no coinciden';
                 return null;
@@ -335,11 +356,11 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                 Expanded(
                   child: GestureDetector(
                     onTap: () => _seleccionarFecha(context),
-                    child: AbsorbPointer(child: _buildCampoTexto(_fechaNacController, "Nacimiento", Icons.cake_rounded)),
+                    child: AbsorbPointer(child: _buildCampoTexto(_fechaNacController, "Nacimiento", Icons.cake_rounded, isDark: isDark)),
                   ),
                 ),
                 const SizedBox(width: 15),
-                Expanded(child: _buildDropdownSexo()),
+                Expanded(child: _buildDropdownSexo(isDark)),
               ],
             ),
             const SizedBox(height: 30),
@@ -349,7 +370,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  Widget _buildPaso2Medico() {
+  Widget _buildPaso2Medico(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
       child: Form(
@@ -357,20 +378,20 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildTitulo("Perfil Médico"),
-            const Text("Información vital en caso de una emergencia.", style: TextStyle(color: Colors.grey, fontSize: 14)),
+            _buildTitulo("Perfil Médico", isDark),
+            Text("Información vital en caso de una emergencia.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14)),
             const SizedBox(height: 30),
 
-            _buildDropdownSangre(),
+            _buildDropdownSangre(isDark),
             const SizedBox(height: 20),
             
-            const Text("Alergias o Condiciones (Opcional)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+            Text("Alergias o Condiciones (Opcional)", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             const SizedBox(height: 10),
             
             Row(
               children: [
                 Expanded(
-                  child: _buildCampoTexto(_alergiasController, "Ej. Penicilina, Asma...", Icons.medical_information_rounded, maximo: 50),
+                  child: _buildCampoTexto(_alergiasController, "Ej. Penicilina, Asma...", Icons.medical_information_rounded, maximo: 50, isDark: isDark),
                 ),
                 const SizedBox(width: 10),
                 Container(
@@ -396,10 +417,10 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               runSpacing: 4.0, 
               children: _listaAlergias.map((alergia) {
                 return Chip(
-                  label: Text(alergia, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
-                  backgroundColor: Colors.red.shade50,
-                  side: BorderSide(color: Colors.red.shade200),
-                  deleteIconColor: Colors.red.shade700,
+                  label: Text(alergia, style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+                  backgroundColor: isDark ? Colors.redAccent.withValues(alpha: 0.2) : Colors.red.shade50,
+                  side: BorderSide(color: isDark ? Colors.redAccent.withValues(alpha: 0.5) : Colors.red.shade200),
+                  deleteIconColor: isDark ? Colors.redAccent : Colors.red.shade700,
                   onDeleted: () => setState(() => _listaAlergias.remove(alergia)),
                 );
               }).toList(),
@@ -410,7 +431,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  Widget _buildPaso3Contactos() {
+  Widget _buildPaso3Contactos(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10),
       child: Form(
@@ -418,23 +439,23 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildTitulo("Red de Apoyo"),
-            const Text("Notificaremos a estas personas automáticamente si detectamos un incidente.", style: TextStyle(color: Colors.grey, fontSize: 14)),
+            _buildTitulo("Red de Apoyo", isDark),
+            Text("Notificaremos a estas personas automáticamente si detectamos un incidente.", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontSize: 14)),
             const SizedBox(height: 30),
 
-            _buildSubtitulo("Contacto Principal"),
+            _buildSubtitulo("Contacto Principal", isDark),
             const SizedBox(height: 15),
-            _buildCampoTexto(_contacto1NombreController, "Nombre (Ej. Mamá)", Icons.person_outline_rounded, maximo: 40),
+            _buildCampoTexto(_contacto1NombreController, "Nombre (Ej. Mamá)", Icons.person_outline_rounded, maximo: 40, isDark: isDark),
             const SizedBox(height: 15),
-            _buildCampoTexto(_contacto1TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone, maximo: 10),
+            _buildCampoTexto(_contacto1TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone, maximo: 10, isDark: isDark),
 
             const SizedBox(height: 35),
 
-            _buildSubtitulo("Contacto Secundario"),
+            _buildSubtitulo("Contacto Secundario", isDark),
             const SizedBox(height: 15),
-            _buildCampoTexto(_contacto2NombreController, "Nombre", Icons.person_outline_rounded, maximo: 40),
+            _buildCampoTexto(_contacto2NombreController, "Nombre", Icons.person_outline_rounded, maximo: 40, isDark: isDark),
             const SizedBox(height: 15),
-            _buildCampoTexto(_contacto2TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone, maximo: 10),
+            _buildCampoTexto(_contacto2TelController, "Teléfono", Icons.phone_rounded, tipoTeclado: TextInputType.phone, maximo: 10, isDark: isDark),
             const SizedBox(height: 30),
           ],
         ),
@@ -444,38 +465,34 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
 
   // --- WIDGETS AUXILIARES ---
 
-  Widget _buildTitulo(String texto) {
+  Widget _buildTitulo(String texto, bool isDark) {
     return Text(texto, style: GoogleFonts.montserrat(fontSize: 28, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary, letterSpacing: -0.5));
   }
 
-  Widget _buildSubtitulo(String texto) {
-    return Text(texto, style: GoogleFonts.montserrat(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87));
+  Widget _buildSubtitulo(String texto, bool isDark) {
+    return Text(texto, style: GoogleFonts.montserrat(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87));
   }
 
-  Widget _buildCampoTexto(TextEditingController controller, String label, IconData icono, {bool esPassword = false, TextInputType tipoTeclado = TextInputType.text, int lineas = 1, String? Function(String?)? validadorExtra, int? maximo}) {
+  Widget _buildCampoTexto(TextEditingController controller, String label, IconData icono, {bool esPassword = false, TextInputType tipoTeclado = TextInputType.text, int lineas = 1, String? Function(String?)? validadorExtra, int? maximo, required bool isDark}) {
     return TextFormField(
       controller: controller,
       obscureText: esPassword ? _ocultarPassword : false, 
       keyboardType: tipoTeclado, 
       maxLines: lineas,
       maxLength: maximo, 
-      style: const TextStyle(fontWeight: FontWeight.w500),
+      style: TextStyle(fontWeight: FontWeight.w500, color: isDark ? Colors.white : Colors.black87),
       validator: (value) {
         if (label.contains("Opcional") || label.contains("Ej. Penicilina")) return null;
         if (value == null || value.trim().isEmpty) return 'Obligatorio';
-        
-        // Esta validación ya se encarga de obligar a que sean exactamente 10 dígitos 
-        // para cualquier campo que sea tipo teléfono (tanto el tuyo como el de tus contactos)
         if (tipoTeclado == TextInputType.phone) {
           if (!RegExp(r'^[0-9]{10}$').hasMatch(value.trim())) return 'Ingresa exactamente 10 números';
         }
-
         if (validadorExtra != null) return validadorExtra(value);
         return null;
       },
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: Colors.grey.shade600),
+        labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey.shade600),
         prefixIcon: Icon(icono, color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)),
         counterText: "", 
         suffixIcon: esPassword ? IconButton(
@@ -483,7 +500,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
           onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
         ) : null,
         filled: true,
-        fillColor: Colors.grey.shade100, 
+        fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade100, 
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)),
@@ -492,39 +509,43 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
     );
   }
 
-  Widget _buildDropdownSangre() {
+  Widget _buildDropdownSangre(bool isDark) {
     return DropdownButtonFormField<String>(
       initialValue: _tipoSangreSeleccionado, 
       icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      dropdownColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: "Tipo de Sangre",
-        labelStyle: TextStyle(color: Colors.grey.shade600),
+        labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey.shade600),
         prefixIcon: const Icon(Icons.bloodtype_rounded, color: Colors.redAccent),
         filled: true,
-        fillColor: Colors.grey.shade100,
+        fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade100,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)),
       ),
-      items: _tiposSangre.map((String sangre) => DropdownMenuItem(value: sangre, child: Text(sangre, style: const TextStyle(fontWeight: FontWeight.w500)))).toList(),
+      items: _tiposSangre.map((String sangre) => DropdownMenuItem(value: sangre, child: Text(sangre))).toList(),
       onChanged: (val) => setState(() => _tipoSangreSeleccionado = val),
       validator: (val) => val == null ? 'Selecciona uno' : null,
     );
   }
 
-  Widget _buildDropdownSexo() {
+  Widget _buildDropdownSexo(bool isDark) {
     return DropdownButtonFormField<String>(
       initialValue: _sexoSeleccionado, 
       icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      dropdownColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: "Sexo",
-        labelStyle: TextStyle(color: Colors.grey.shade600),
+        labelStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey.shade600),
         filled: true,
-        fillColor: Colors.grey.shade100,
+        fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade100,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5)),
       ),
-      items: _sexos.map((String sexo) => DropdownMenuItem(value: sexo, child: Text(sexo, style: const TextStyle(fontWeight: FontWeight.w500)))).toList(),
+      items: _sexos.map((String sexo) => DropdownMenuItem(value: sexo, child: Text(sexo))).toList(),
       onChanged: (val) => setState(() => _sexoSeleccionado = val),
       validator: (val) => val == null ? 'Requerido' : null,
     );
@@ -569,20 +590,23 @@ class _DialogoConfirmacionRegistroState extends State<DialogoConfirmacionRegistr
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
         children: [
           const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 30), const SizedBox(width: 10),
-          Expanded(child: Text("¿Datos correctos?", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 18))),
+          Expanded(child: Text("¿Datos correctos?", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.black87))),
         ],
       ),
-      content: const Text("Tus contactos y perfil médico deben ser precisos. Te enviaremos un enlace a tu correo electrónico para verificar la cuenta.", style: TextStyle(fontSize: 14, height: 1.5)),
+      content: Text("Tus contactos y perfil médico deben ser precisos. Te enviaremos un enlace a tu correo electrónico para verificar la cuenta.", style: TextStyle(fontSize: 14, height: 1.5, color: isDark ? Colors.grey[300] : Colors.black87)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("REVISAR DATOS", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold))),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text("REVISAR DATOS", style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey, fontWeight: FontWeight.bold))),
         ElevatedButton(
           onPressed: _segundos == 0 ? () { Navigator.pop(context); widget.onConfirmar(); } : null,
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A237E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
           child: Text(_segundos > 0 ? "CONFIRMAR EN $_segundos..." : "SÍ, CREAR CUENTA", style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
@@ -640,23 +664,26 @@ class _DialogoEsperandoVerificacionState extends State<DialogoEsperandoVerificac
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Column(
         children: [
-          const Icon(Icons.mark_email_unread_rounded, color: Color(0xFF1A237E), size: 50),
+          Icon(Icons.mark_email_unread_rounded, color: Theme.of(context).colorScheme.primary, size: 50),
           const SizedBox(height: 15),
-          Text("¡Verifica tu correo!", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 20), textAlign: TextAlign.center),
+          Text("¡Verifica tu correo!", style: GoogleFonts.montserrat(fontWeight: FontWeight.bold, fontSize: 20, color: isDark ? Colors.white : Colors.black87), textAlign: TextAlign.center),
         ],
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text("Hemos enviado un enlace a:", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700)),
+          Text("Hemos enviado un enlace a:", textAlign: TextAlign.center, style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey.shade700)),
           const SizedBox(height: 5),
-          Text(widget.email, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(widget.email, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
           const SizedBox(height: 15),
-          const Text("Abre tu correo, haz clic en el enlace y luego presiona el botón de abajo.", textAlign: TextAlign.center, style: TextStyle(fontSize: 14)),
+          Text("Abre tu correo, haz clic en el enlace y luego presiona el botón de abajo.", textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: isDark ? Colors.grey[300] : Colors.black87)),
         ],
       ),
       actionsAlignment: MainAxisAlignment.center,
@@ -667,7 +694,7 @@ class _DialogoEsperandoVerificacionState extends State<DialogoEsperandoVerificac
             ElevatedButton(
               onPressed: _verificando ? null : _comprobarVerificacion,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A237E), 
+                backgroundColor: Theme.of(context).colorScheme.primary, 
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
@@ -678,7 +705,7 @@ class _DialogoEsperandoVerificacionState extends State<DialogoEsperandoVerificac
             ),
             TextButton(
               onPressed: _verificando ? null : _hacerloMasTarde, 
-              child: const Text("Lo haré más tarde", style: TextStyle(color: Colors.grey))
+              child: Text("Lo haré más tarde", style: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey))
             ),
           ],
         )

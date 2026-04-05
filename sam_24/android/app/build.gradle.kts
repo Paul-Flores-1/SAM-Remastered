@@ -26,26 +26,27 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // --- CORRECCIÓN DE SINTAXIS PARA KOTLIN DSL ---
+        isCoreLibraryDesugaringEnabled = true 
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.sam_remastered"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         
-        // ¡Aquí ya funcionará perfecto porque ya definimos localProperties arriba!
+        // Habilitar MultiDex para soportar todas las librerías de Firebase/Maps
+        multiDexEnabled = true
+        
         manifestPlaceholders["GOOGLE_API_KEY"] = localProperties.getProperty("GOOGLE_API_KEY", "")
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -59,4 +60,9 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Dependencias necesarias para el parche de compatibilidad (Desugaring)
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

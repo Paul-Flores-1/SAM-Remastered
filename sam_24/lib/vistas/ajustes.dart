@@ -258,7 +258,7 @@ class _PantallaAjustesState extends State<PantallaAjustes> {
           Switch.adaptive(
             value: valor,
             onChanged: onChanged,
-            activeColor: Colors.white,
+            activeThumbColor: Colors.white,
             activeTrackColor: Theme.of(context).colorScheme.primary,
           ),
         ],
