@@ -30,6 +30,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: "^0.13.1"
 
 flutter:
   uses-material-design: true
@@ -38,3 +39,13 @@ flutter:
   assets:
     - assets/images/
     - assets/images/cruz_roja.png
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  # Esta imagen DEBE tener el fondo blanco ya integrado para iOS y Android viejo
+  image_path: "assets/images/logo_sam_blanc.png" 
+  
+  # Configuración para Android Moderno (Iconos Adaptativos)
+  adaptive_icon_background: "#FFFFFF" # <--- Aquí ponemos el Blanco
+  adaptive_icon_foreground: "assets/images/logo_sam.png" # <--- Tu logo sin fondo
